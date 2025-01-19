@@ -1,27 +1,19 @@
 import { fetchMockDatasources } from "actions/datasourceActions";
-import {
-  fetchGitProtectedBranchesInit,
-  fetchGitStatusInit,
-  remoteUrlInputValue,
-  resetPullMergeStatus,
-  fetchBranchesInit,
-  triggerAutocommitInitAction,
-  getGitMetadataInitAction,
-} from "actions/gitSyncActions";
-import { restoreRecentEntitiesRequest } from "actions/globalSearchActions";
 import { resetEditorSuccess } from "actions/initActions";
-import { fetchAllPageEntityCompletion, setupPage } from "actions/pageActions";
+import {
+  fetchAllPageEntityCompletion,
+  setupPageAction,
+} from "actions/pageActions";
 import {
   executePageLoadActions,
   fetchActions,
 } from "actions/pluginActionActions";
 import { fetchPluginFormConfigs } from "actions/pluginActions";
-import type { ApplicationPayload } from "@appsmith/constants/ReduxActionConstants";
+import type { ApplicationPayload } from "entities/Application";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { addBranchParam } from "constants/routes";
+} from "ee/constants/ReduxActionConstants";
 import type { APP_MODE } from "entities/App";
 import { call, fork, put, select, spawn } from "redux-saga/effects";
 import type { EditConsolidatedApi } from "sagas/InitSagas";
@@ -30,13 +22,9 @@ import {
   reportSWStatus,
   waitForWidgetConfigBuild,
 } from "sagas/InitSagas";
-import { getCurrentApplication } from "selectors/editorSelectors";
-import { getCurrentGitBranch } from "selectors/gitSyncSelectors";
-import AnalyticsUtil from "@appsmith/utils/AnalyticsUtil";
-import history from "utils/history";
-import PerformanceTracker, {
-  PerformanceTransactionName,
-} from "utils/PerformanceTracker";
+import { isGitPersistBranchEnabledSelector } from "selectors/gitSyncSelectors";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+// import history from "utils/history";
 import type { AppEnginePayload } from ".";
 import AppEngine, {
   ActionsNotFoundError,
@@ -45,29 +33,48 @@ import AppEngine, {
 } from ".";
 import { fetchJSLibraries } from "actions/JSLibraryActions";
 import CodemirrorTernService from "utils/autocomplete/CodemirrorTernService";
-import {
-  waitForSegmentInit,
-  waitForFetchUserSuccess,
-} from "@appsmith/sagas/userSagas";
+import { waitForFetchUserSuccess } from "ee/sagas/userSagas";
 import { getFirstTimeUserOnboardingComplete } from "selectors/onboardingSelectors";
-import { isAirgapped } from "@appsmith/utils/airgapHelpers";
-import { getAIPromptTriggered } from "utils/storage";
+import { isAirgapped } from "ee/utils/airgapHelpers";
+import { getAIPromptTriggered, setLatestGitBranchInLocal } from "utils/storage";
 import { trackOpenEditorTabs } from "../../utils/editor/browserTabsTracking";
 import { EditorModes } from "components/editorComponents/CodeEditor/EditorConfig";
-import { waitForFetchEnvironments } from "@appsmith/sagas/EnvironmentSagas";
-import { getPageDependencyActions } from "@appsmith/entities/Engine/actionHelpers";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/selectedWorkspaceSelectors";
+import { waitForFetchEnvironments } from "ee/sagas/EnvironmentSagas";
+import { getPageDependencyActions } from "ee/entities/Engine/actionHelpers";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
 import {
   getFeatureFlagsForEngine,
   type DependentFeatureFlags,
-} from "@appsmith/selectors/engineSelectors";
+} from "ee/selectors/engineSelectors";
 import { fetchJSCollections } from "actions/jsActionActions";
 import {
   fetchAppThemesAction,
   fetchSelectedAppThemeAction,
 } from "actions/appThemingActions";
-import type { Span } from "@opentelemetry/api";
-import { endSpan, startNestedSpan } from "UITelemetry/generateTraces";
+import { getCurrentApplication } from "ee/selectors/applicationSelectors";
+import type { Span } from "instrumentation/types";
+import { endSpan, startNestedSpan } from "instrumentation/generateTraces";
+import { getCurrentUser } from "selectors/usersSelectors";
+import type { User } from "constants/userConstants";
+import log from "loglevel";
+import { gitArtifactActions } from "git/store/gitArtifactSlice";
+import { restoreRecentEntitiesRequest } from "actions/globalSearchActions";
+import {
+  fetchBranchesInit,
+  fetchGitProtectedBranchesInit,
+  fetchGitStatusInit,
+  getGitMetadataInitAction,
+  remoteUrlInputValue,
+  resetPullMergeStatus,
+  triggerAutocommitInitAction,
+} from "actions/gitSyncActions";
+import history from "utils/history";
+import { addBranchParam } from "constants/routes";
+import {
+  selectGitApplicationCurrentBranch,
+  selectGitModEnabled,
+} from "selectors/gitModSelectors";
+import { applicationArtifact } from "git/artifact-helpers/application";
 
 export default class AppEditorEngine extends AppEngine {
   constructor(mode: APP_MODE) {
@@ -89,6 +96,8 @@ export default class AppEditorEngine extends AppEngine {
    * @param AppEnginePayload
    * @returns
    */
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public *setupEngine(payload: AppEnginePayload, rootSpan: Span): any {
     const editorSetupSpan = startNestedSpan(
       "AppEditorEngine.setupEngine",
@@ -100,18 +109,6 @@ export default class AppEditorEngine extends AppEngine {
     CodemirrorTernService.resetServer();
 
     endSpan(editorSetupSpan);
-  }
-
-  public startPerformanceTracking() {
-    PerformanceTracker.startAsyncTracking(
-      PerformanceTransactionName.INIT_EDIT_APP,
-    );
-  }
-
-  public stopPerformanceTracking() {
-    PerformanceTracker.stopAsyncTracking(
-      PerformanceTransactionName.INIT_EDIT_APP,
-    );
   }
 
   private *loadPageThemesAndActions(
@@ -128,13 +125,19 @@ export default class AppEditorEngine extends AppEngine {
     const {
       currentTheme,
       customJSLibraries,
+      packagePullStatus,
       pageWithMigratedDsl,
       themes,
       unpublishedActionCollections,
       unpublishedActions,
     } = allResponses;
     const initActionsCalls = [
-      setupPage(toLoadPageId, true, pageWithMigratedDsl),
+      setupPageAction({
+        id: toLoadPageId,
+        isFirstLoad: true,
+        pageWithMigratedDsl,
+        packagePullStatus,
+      }),
       fetchActions({ applicationId, unpublishedActions }, []),
       fetchJSCollections({ applicationId, unpublishedActionCollections }),
       fetchSelectedAppThemeAction(applicationId, currentTheme),
@@ -176,22 +179,24 @@ export default class AppEditorEngine extends AppEngine {
       "AppEditorEngine.waitForFetchUserSuccess",
       rootSpan,
     );
+
     yield call(waitForFetchUserSuccess);
     endSpan(waitForUserSpan);
-
-    const waitForSegmentInitSpan = startNestedSpan(
-      "AppEditorEngine.waitForSegmentInit",
-      rootSpan,
-    );
-    yield call(waitForSegmentInit, true);
-    endSpan(waitForSegmentInitSpan);
 
     const waitForFetchEnvironmentsSpan = startNestedSpan(
       "AppEditorEngine.waitForFetchEnvironments",
       rootSpan,
     );
+
     yield call(waitForFetchEnvironments);
     endSpan(waitForFetchEnvironmentsSpan);
+
+    yield call(
+      this.loadPluginsAndDatasources,
+      allResponses,
+      rootSpan,
+      applicationId,
+    );
 
     yield put(fetchAllPageEntityCompletion([executePageLoadActions()]));
     endSpan(loadPageThemesAndActionsSpan);
@@ -200,6 +205,7 @@ export default class AppEditorEngine extends AppEngine {
   private *loadPluginsAndDatasources(
     allResponses: EditConsolidatedApi,
     rootSpan: Span,
+    applicationId: string,
   ) {
     const loadPluginsAndDatasourcesSpan = startNestedSpan(
       "AppEditorEngine.loadPluginsAndDatasources",
@@ -212,7 +218,12 @@ export default class AppEditorEngine extends AppEngine {
       getFeatureFlagsForEngine,
     );
     const { errorActions, initActions, successActions } =
-      getPageDependencyActions(currentWorkspaceId, featureFlags, allResponses);
+      getPageDependencyActions(
+        currentWorkspaceId,
+        featureFlags,
+        allResponses,
+        applicationId,
+      );
 
     if (!isAirgappedInstance) {
       initActions.push(fetchMockDatasources(mockDatasources));
@@ -250,6 +261,8 @@ export default class AppEditorEngine extends AppEngine {
     applicationId: string,
     allResponses: EditConsolidatedApi,
     rootSpan: Span,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): any {
     yield call(
       this.loadPageThemesAndActions,
@@ -258,7 +271,6 @@ export default class AppEditorEngine extends AppEngine {
       allResponses,
       rootSpan,
     );
-    yield call(this.loadPluginsAndDatasources, allResponses, rootSpan);
   }
 
   public *completeChore(rootSpan: Span) {
@@ -273,6 +285,29 @@ export default class AppEditorEngine extends AppEngine {
     const currentApplication: ApplicationPayload = yield select(
       getCurrentApplication,
     );
+    const currentBranch: string | undefined = yield select(
+      selectGitApplicationCurrentBranch,
+    );
+
+    const isGitPersistBranchEnabled: boolean = yield select(
+      isGitPersistBranchEnabledSelector,
+    );
+
+    if (isGitPersistBranchEnabled) {
+      const currentUser: User = yield select(getCurrentUser);
+
+      if (currentUser?.email && currentApplication?.baseId && currentBranch) {
+        yield setLatestGitBranchInLocal(
+          currentUser.email,
+          currentApplication.baseId,
+          currentBranch,
+        );
+      } else {
+        log.error(
+          `There was an error setting the latest git branch in local - userEmail: ${!!currentUser?.email}, applicationId: ${currentApplication?.baseId}, branch: ${currentBranch}`,
+        );
+      }
+    }
 
     const [isAnotherEditorTabOpen, currentTabs] = yield call(
       trackOpenEditorTabs,
@@ -287,6 +322,16 @@ export default class AppEditorEngine extends AppEngine {
         currentTabs,
       });
     }
+
+    if (currentApplication?.id) {
+      yield put(
+        restoreRecentEntitiesRequest({
+          applicationId: currentApplication.id,
+          branch: currentBranch,
+        }),
+      );
+    }
+
     if (isFirstTimeUserOnboardingComplete) {
       yield put({
         type: ReduxActionTypes.SET_FIRST_TIME_USER_ONBOARDING_APPLICATION_IDS,
@@ -329,21 +374,32 @@ export default class AppEditorEngine extends AppEngine {
 
   public *loadGit(applicationId: string, rootSpan: Span) {
     const loadGitSpan = startNestedSpan("AppEditorEngine.loadGit", rootSpan);
+    const isGitModEnabled: boolean = yield select(selectGitModEnabled);
 
-    const branchInStore: string = yield select(getCurrentGitBranch);
-    yield put(
-      restoreRecentEntitiesRequest({
-        applicationId,
-        branch: branchInStore,
-      }),
-    );
-    // init of temporary remote url from old application
-    yield put(remoteUrlInputValue({ tempRemoteUrl: "" }));
-    // add branch query to path and fetch status
+    if (isGitModEnabled) {
+      const currentApplication: ApplicationPayload = yield select(
+        getCurrentApplication,
+      );
 
-    if (branchInStore) {
-      history.replace(addBranchParam(branchInStore));
-      yield fork(this.loadGitInBackground);
+      yield put(
+        gitArtifactActions.initGitForEditor({
+          artifactDef: applicationArtifact(currentApplication.baseId),
+          artifact: currentApplication,
+        }),
+      );
+    } else {
+      const currentBranch: string = yield select(
+        selectGitApplicationCurrentBranch,
+      );
+
+      // init of temporary remote url from old application
+      yield put(remoteUrlInputValue({ tempRemoteUrl: "" }));
+      // add branch query to path and fetch status
+
+      if (currentBranch) {
+        history.replace(addBranchParam(currentBranch));
+        yield fork(this.loadGitInBackground);
+      }
     }
 
     endSpan(loadGitSpan);
@@ -351,7 +407,6 @@ export default class AppEditorEngine extends AppEngine {
 
   private *loadGitInBackground() {
     yield put(fetchBranchesInit());
-    yield put(fetchGitProtectedBranchesInit());
     yield put(fetchGitProtectedBranchesInit());
     yield put(getGitMetadataInitAction());
     yield put(triggerAutocommitInitAction());

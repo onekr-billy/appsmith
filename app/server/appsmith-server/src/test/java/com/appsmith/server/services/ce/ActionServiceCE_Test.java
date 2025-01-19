@@ -1,7 +1,6 @@
 package com.appsmith.server.services.ce;
 
 import com.appsmith.external.dtos.DslExecutableDTO;
-import com.appsmith.external.helpers.AppsmithBeanUtils;
 import com.appsmith.external.helpers.AppsmithEventContext;
 import com.appsmith.external.helpers.AppsmithEventContextType;
 import com.appsmith.external.models.ActionConfiguration;
@@ -9,7 +8,6 @@ import com.appsmith.external.models.ActionDTO;
 import com.appsmith.external.models.Datasource;
 import com.appsmith.external.models.DatasourceConfiguration;
 import com.appsmith.external.models.DatasourceStorageDTO;
-import com.appsmith.external.models.DefaultResources;
 import com.appsmith.external.models.PaginationType;
 import com.appsmith.external.models.Policy;
 import com.appsmith.external.models.Property;
@@ -31,6 +29,7 @@ import com.appsmith.server.dtos.ActionMoveDTO;
 import com.appsmith.server.dtos.ActionViewDTO;
 import com.appsmith.server.dtos.ApplicationAccessDTO;
 import com.appsmith.server.dtos.ApplicationJson;
+import com.appsmith.server.dtos.CreateActionMetaDTO;
 import com.appsmith.server.dtos.LayoutDTO;
 import com.appsmith.server.dtos.PageDTO;
 import com.appsmith.server.exceptions.AppsmithError;
@@ -251,7 +250,7 @@ public class ActionServiceCE_Test {
         Application newApp = new Application();
         newApp.setName(UUID.randomUUID().toString());
         GitArtifactMetadata gitData = new GitArtifactMetadata();
-        gitData.setBranchName("actionServiceTest");
+        gitData.setRefName("actionServiceTest");
         newApp.setGitApplicationMetadata(gitData);
         gitConnectedApp = applicationPageService
                 .createApplication(newApp, workspaceId)
@@ -259,12 +258,12 @@ public class ActionServiceCE_Test {
                     application2.getGitApplicationMetadata().setDefaultApplicationId(application2.getId());
                     return applicationService.save(application2).zipWhen(application1 -> exportService
                             .exportByArtifactIdAndBranchName(
-                                    application1.getId(), gitData.getBranchName(), ArtifactType.APPLICATION)
+                                    application1.getId(), gitData.getRefName(), ArtifactType.APPLICATION)
                             .map(artifactExchangeJson -> (ApplicationJson) artifactExchangeJson));
                 })
                 // Assign the branchName to all the resources connected to the application
                 .flatMap(tuple -> importService.importArtifactInWorkspaceFromGit(
-                        workspaceId, tuple.getT1().getId(), tuple.getT2(), gitData.getBranchName()))
+                        workspaceId, tuple.getT1().getId(), tuple.getT2(), gitData.getRefName()))
                 .map(importableArtifact -> (Application) importableArtifact)
                 .block();
 
@@ -272,7 +271,7 @@ public class ActionServiceCE_Test {
                 .findPageById(gitConnectedApp.getPages().get(0).getId(), READ_PAGES, false)
                 .block();
 
-        branchName = gitConnectedApp.getGitApplicationMetadata().getBranchName();
+        branchName = gitConnectedApp.getGitApplicationMetadata().getRefName();
 
         datasource = new Datasource();
         datasource.setName("Default Database");
@@ -308,17 +307,12 @@ public class ActionServiceCE_Test {
         action.setActionConfiguration(actionConfiguration);
         action.setDatasource(datasource);
 
-        Mono<NewAction> actionMono = layoutActionService
-                .createSingleActionWithBranch(action, branchName)
-                .flatMap(createdAction -> newActionService.findByBranchNameAndDefaultActionId(
-                        branchName, createdAction.getId(), false, READ_ACTIONS));
+        Mono<ActionDTO> actionMono = layoutActionService.createSingleAction(action);
 
         StepVerifier.create(actionMono)
-                .assertNext(newAction -> {
-                    assertThat(newAction.getUnpublishedAction().getPageId()).isEqualTo(gitConnectedPage.getId());
-                    assertThat(newAction.getDefaultResources().getActionId()).isEqualTo(newAction.getId());
-                    assertThat(newAction.getDefaultResources().getApplicationId())
-                            .isEqualTo(gitConnectedApp.getId());
+                .assertNext(actionDTO -> {
+                    assertThat(actionDTO.getPageId()).isEqualTo(gitConnectedPage.getId());
+                    assertThat(actionDTO.getBaseId()).isEqualTo(actionDTO.getId());
                 })
                 .verifyComplete();
     }
@@ -419,19 +413,14 @@ public class ActionServiceCE_Test {
         action.setActionConfiguration(actionConfiguration);
         action.setDatasource(datasource);
 
-        Mono<ActionDTO> actionMono = layoutActionService.createSingleActionWithBranch(action, branchName);
+        Mono<ActionDTO> actionMono = layoutActionService.createSingleAction(action);
 
         StepVerifier.create(Mono.zip(actionMono, defaultPermissionGroupsMono))
                 .assertNext(tuple -> {
                     ActionDTO createdAction = tuple.getT1();
                     assertThat(createdAction.getExecuteOnLoad()).isFalse();
-                    assertThat(createdAction.getDefaultResources()).isNotNull();
                     assertThat(createdAction.getUserPermissions()).isNotEmpty();
-                    assertThat(createdAction.getDefaultResources().getActionId())
-                            .isEqualTo(createdAction.getId());
-                    assertThat(createdAction.getDefaultResources().getPageId()).isEqualTo(gitConnectedPage.getId());
-                    assertThat(createdAction.getDefaultResources().getApplicationId())
-                            .isEqualTo(gitConnectedPage.getApplicationId());
+                    assertThat(createdAction.getBaseId()).isEqualTo(createdAction.getId());
 
                     List<PermissionGroup> permissionGroups = tuple.getT2();
                     PermissionGroup adminPermissionGroup = permissionGroups.stream()
@@ -523,9 +512,7 @@ public class ActionServiceCE_Test {
         PageDTO newPage = new PageDTO();
         newPage.setName("Destination Page");
         newPage.setApplicationId(gitConnectedApp.getId());
-        PageDTO destinationPage = applicationPageService
-                .createPageWithBranchName(newPage, branchName)
-                .block();
+        PageDTO destinationPage = applicationPageService.createPage(newPage).block();
 
         ActionDTO action = new ActionDTO();
         action.setName("validAction");
@@ -535,17 +522,14 @@ public class ActionServiceCE_Test {
         action.setActionConfiguration(actionConfiguration);
         action.setDatasource(datasource);
 
-        Mono<ActionDTO> createActionMono = layoutActionService
-                .createSingleActionWithBranch(action, branchName)
-                .cache();
-        DefaultResources sourceActionDefaultRes = new DefaultResources();
+        Mono<ActionDTO> createActionMono =
+                layoutActionService.createSingleAction(action).cache();
 
         Mono<ActionDTO> movedActionMono = createActionMono.flatMap(savedAction -> {
             ActionMoveDTO actionMoveDTO = new ActionMoveDTO();
             actionMoveDTO.setAction(savedAction);
             actionMoveDTO.setDestinationPageId(destinationPage.getId());
-            AppsmithBeanUtils.copyNestedNonNullProperties(savedAction.getDefaultResources(), sourceActionDefaultRes);
-            return layoutActionService.moveAction(actionMoveDTO, branchName);
+            return layoutActionService.moveAction(actionMoveDTO);
         });
 
         StepVerifier.create(Mono.zip(createActionMono, movedActionMono))
@@ -557,13 +541,6 @@ public class ActionServiceCE_Test {
                     assertThat(movedAction.getName()).isEqualTo(originalAction.getName());
                     assertThat(movedAction.getPolicies()).containsAll(originalAction.getPolicies());
                     assertThat(movedAction.getPageId()).isEqualTo(destinationPage.getId());
-
-                    // Check if the defaultIds are updated as per destination page default Id
-                    assertThat(movedAction.getDefaultResources()).isNotNull();
-                    assertThat(movedAction.getDefaultResources().getPageId())
-                            .isEqualTo(destinationPage.getDefaultResources().getPageId());
-                    assertThat(sourceActionDefaultRes.getPageId())
-                            .isEqualTo(gitConnectedPage.getDefaultResources().getPageId());
                 })
                 .verifyComplete();
     }
@@ -655,7 +632,7 @@ public class ActionServiceCE_Test {
         ActionConfiguration actionConfiguration = new ActionConfiguration();
         actionConfiguration.setHttpMethod(HttpMethod.GET);
         action.setActionConfiguration(actionConfiguration);
-        Mono<ActionDTO> actionMono = layoutActionService.createSingleActionWithBranch(action, branchName);
+        Mono<ActionDTO> actionMono = layoutActionService.createSingleAction(action);
 
         StepVerifier.create(actionMono)
                 .expectErrorMatches(throwable -> throwable instanceof AppsmithException
@@ -679,25 +656,6 @@ public class ActionServiceCE_Test {
                         && throwable
                                 .getMessage()
                                 .equals(AppsmithError.NO_RESOURCE_FOUND.getMessage("page", "invalid page id here")))
-                .verify();
-    }
-
-    @Test
-    @WithUserDetails(value = "api_user")
-    public void createAction_forGitConnectedAppWithInvalidBranchName_throwException() {
-        ActionDTO action = new ActionDTO();
-        action.setName("randomActionName");
-        action.setPageId(gitConnectedPage.getId());
-        ActionConfiguration actionConfiguration = new ActionConfiguration();
-        actionConfiguration.setHttpMethod(HttpMethod.GET);
-        action.setActionConfiguration(actionConfiguration);
-        Mono<ActionDTO> actionMono = layoutActionService.createSingleActionWithBranch(action, "randomTestBranch");
-        StepVerifier.create(actionMono)
-                .expectErrorMatches(throwable -> throwable instanceof AppsmithException
-                        && throwable
-                                .getMessage()
-                                .equals(AppsmithError.NO_RESOURCE_FOUND.getMessage(
-                                        FieldName.PAGE, action.getPageId() + ", randomTestBranch")))
                 .verify();
     }
 
@@ -1072,7 +1030,8 @@ public class ActionServiceCE_Test {
         applicationAccessDTO.setPublicAccess(true);
 
         Mono<Application> publicAppMono = applicationService
-                .changeViewAccess(createdApplication.getId(), applicationAccessDTO)
+                .changeViewAccessForSingleBranchByBranchedApplicationId(
+                        createdApplication.getId(), applicationAccessDTO)
                 .cache();
 
         Datasource datasource = new Datasource();
@@ -1219,7 +1178,10 @@ public class ActionServiceCE_Test {
         action.setDatasource(datasource);
 
         AppsmithEventContext eventContext = new AppsmithEventContext(AppsmithEventContextType.CLONE_PAGE);
-        Mono<ActionDTO> actionMono = layoutActionService.createAction(action, eventContext, Boolean.FALSE);
+        CreateActionMetaDTO createActionMetaDTO = new CreateActionMetaDTO();
+        createActionMetaDTO.setEventContext(eventContext);
+        createActionMetaDTO.setIsJsAction(Boolean.FALSE);
+        Mono<ActionDTO> actionMono = layoutActionService.createAction(action, createActionMetaDTO);
         StepVerifier.create(actionMono)
                 .assertNext(createdAction -> {
                     // executeOnLoad is expected to be set to false in case of default context

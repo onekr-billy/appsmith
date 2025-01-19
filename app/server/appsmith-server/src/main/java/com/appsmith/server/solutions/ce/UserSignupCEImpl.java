@@ -300,7 +300,6 @@ public class UserSignupCEImpl implements UserSignupCE {
                 })
                 .flatMap(user -> {
                     final UserData userData = new UserData();
-                    userData.setRole(userFromRequest.getRole());
                     userData.setProficiency(userFromRequest.getProficiency());
                     userData.setUseCase(userFromRequest.getUseCase());
 
@@ -380,9 +379,6 @@ public class UserSignupCEImpl implements UserSignupCE {
                     if (formData.containsKey(FieldName.NAME)) {
                         user.setName(formData.getFirst(FieldName.NAME));
                     }
-                    if (formData.containsKey("role")) {
-                        user.setRole(formData.getFirst("role"));
-                    }
                     if (formData.containsKey("proficiency")) {
                         user.setProficiency(formData.getFirst("proficiency"));
                     }
@@ -440,13 +436,13 @@ public class UserSignupCEImpl implements UserSignupCE {
                     final String instanceId = tuple.getT1();
                     final String ip = tuple.getT2();
                     log.debug("Installation setup complete.");
-                    String newsletterSignedUpUserEmail = userFromRequest.isSignupForNewsletter() ? user.getEmail() : "";
-                    String newsletterSignedUpUserName = userFromRequest.isSignupForNewsletter() ? user.getName() : "";
+                    String newsletterSignedUpUserEmail = user.getEmail();
+                    String newsletterSignedUpUserName = user.getName();
                     Map<String, Object> analyticsProps = new HashMap<>();
                     analyticsProps.put(DISABLE_TELEMETRY, !userFromRequest.isAllowCollectingAnonymousData());
                     analyticsProps.put(SUBSCRIBE_MARKETING, userFromRequest.isSignupForNewsletter());
                     analyticsProps.put(EMAIL, newsletterSignedUpUserEmail);
-                    analyticsProps.put(ROLE, ObjectUtils.defaultIfNull(userData.getRole(), ""));
+                    analyticsProps.put(ROLE, "");
                     analyticsProps.put(PROFICIENCY, ObjectUtils.defaultIfNull(userData.getProficiency(), ""));
                     analyticsProps.put(GOAL, ObjectUtils.defaultIfNull(userData.getUseCase(), ""));
                     // ip is a reserved keyword for tracking events in Mixpanel though this is allowed in
@@ -460,7 +456,6 @@ public class UserSignupCEImpl implements UserSignupCE {
 
                     analyticsService.identifyInstance(
                             instanceId,
-                            userData.getRole(),
                             userData.getProficiency(),
                             userData.getUseCase(),
                             newsletterSignedUpUserEmail,

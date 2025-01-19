@@ -1,17 +1,16 @@
 import {
   all,
   call,
+  delay,
   put,
   select,
   take,
-  takeEvery,
   takeLatest,
 } from "redux-saga/effects";
 import * as Sentry from "@sentry/react";
-import type { updateActionDataPayloadType } from "actions/pluginActionActions";
-import { executePageLoadActions } from "actions/pluginActionActions";
 import {
   clearActionResponse,
+  executePageLoadActions,
   executePluginActionError,
   executePluginActionRequest,
   executePluginActionSuccess,
@@ -19,19 +18,14 @@ import {
   updateAction,
   updateActionData,
 } from "actions/pluginActionActions";
-import {
-  handleExecuteJSFunctionSaga,
-  makeUpdateJSCollection,
-} from "sagas/JSPaneSagas";
+import { handleExecuteJSFunctionSaga } from "sagas/JSPaneSagas";
 
-import type {
-  ApplicationPayload,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ApplicationPayload } from "entities/Application";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import type {
   ActionExecutionResponse,
   ActionResponse,
@@ -46,14 +40,11 @@ import {
   getDatasource,
   getJSCollectionFromAllEntities,
   getPlugin,
-  isActionDirty,
-  isActionSaving,
-} from "@appsmith/selectors/entitiesSelector";
-import { getIsGitSyncModalOpen } from "selectors/gitSyncSelectors";
+} from "ee/selectors/entitiesSelector";
 import {
   getAppMode,
   getCurrentApplication,
-} from "@appsmith/selectors/applicationSelectors";
+} from "ee/selectors/applicationSelectors";
 import {
   find,
   flatten,
@@ -65,21 +56,17 @@ import {
   isString,
   set,
   unset,
+  zipObject,
 } from "lodash";
 import AppsmithConsole from "utils/AppsmithConsole";
-import {
-  ENTITY_TYPE,
-  PLATFORM_ERROR,
-} from "@appsmith/entities/AppsmithConsole/utils";
+import { ENTITY_TYPE, PLATFORM_ERROR } from "ee/entities/AppsmithConsole/utils";
 import {
   extractClientDefinedErrorMetadata,
   validateResponse,
 } from "sagas/ErrorSagas";
-import type { EventName } from "@appsmith/utils/analyticsUtilTypes";
-import AnalyticsUtil from "@appsmith/utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 import type { Action } from "entities/Action";
 import { ActionExecutionContext } from "entities/Action";
-import { PluginType } from "entities/Action";
 import LOG_TYPE from "entities/AppsmithConsole/logtype";
 import {
   ACTION_EXECUTION_CANCELLED,
@@ -89,7 +76,7 @@ import {
   ERROR_FAIL_ON_PAGE_LOAD_ACTIONS,
   ERROR_PLUGIN_ACTION_EXECUTE,
   SWITCH_ENVIRONMENT_SUCCESS,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import type {
   LayoutOnLoadActionErrors,
   PageAction,
@@ -100,19 +87,17 @@ import {
 } from "constants/AppsmithActionConstants/ActionConstants";
 import {
   getCurrentApplicationId,
+  getCurrentBasePageId,
   getCurrentPageId,
   getIsSavingEntity,
   getLayoutOnLoadActions,
   getLayoutOnLoadIssues,
 } from "selectors/editorSelectors";
-import PerformanceTracker, {
-  PerformanceTransactionName,
-} from "utils/PerformanceTracker";
-import * as log from "loglevel";
+import log from "loglevel";
 import { EMPTY_RESPONSE } from "components/editorComponents/emptyResponse";
-import type { AppState } from "@appsmith/reducers";
-import { DEFAULT_EXECUTE_ACTION_TIMEOUT_MS } from "@appsmith/constants/ApiConstants";
-import { evaluateActionBindings, evalWorker } from "sagas/EvaluationsSaga";
+import type { AppState } from "ee/reducers";
+import { DEFAULT_EXECUTE_ACTION_TIMEOUT_MS } from "ee/constants/ApiConstants";
+import { evaluateActionBindings } from "sagas/EvaluationsSaga";
 import { isBlobUrl, parseBlobUrl } from "utils/AppsmithUtils";
 import { getType, Types } from "utils/TypeHelpers";
 import { matchPath } from "react-router";
@@ -139,48 +124,53 @@ import {
 import { shouldBeDefined, trimQueryString } from "utils/helpers";
 import { requestModalConfirmationSaga } from "sagas/UtilSagas";
 import { ModalType } from "reducers/uiReducers/modalActionReducer";
-import { matchBasePath } from "@appsmith/pages/Editor/Explorer/helpers";
+import { matchBasePath } from "ee/pages/Editor/Explorer/helpers";
 import {
   findDatatype,
   isTrueObject,
-} from "@appsmith/workers/Evaluation/evaluationUtils";
-import type { Plugin } from "api/PluginApi";
+} from "ee/workers/Evaluation/evaluationUtils";
+import type { Plugin } from "entities/Plugin";
 import { setDefaultActionDisplayFormat } from "./PluginActionSagaUtils";
 import { checkAndLogErrorsIfCyclicDependency } from "sagas/helper";
-import { toast } from "design-system";
+import { toast } from "@appsmith/ads";
 import type { TRunDescription } from "workers/Evaluation/fns/actionFns";
-import { DEBUGGER_TAB_KEYS } from "components/editorComponents/Debugger/helpers";
+import { DEBUGGER_TAB_KEYS } from "components/editorComponents/Debugger/constants";
 import { FILE_SIZE_LIMIT_FOR_BLOBS } from "constants/WidgetConstants";
-import type { ActionData } from "@appsmith/reducers/entityReducers/actionsReducer";
+import type { ActionData } from "ee/reducers/entityReducers/actionsReducer";
 import { handleStoreOperations } from "./StoreActionSaga";
-import { fetchPage } from "actions/pageActions";
+import { fetchPageAction } from "actions/pageActions";
 import type { Datasource } from "entities/Datasource";
 import { softRefreshDatasourceStructure } from "actions/datasourceActions";
 import {
-  changeQuery,
-  setQueryPaneDebuggerState,
-} from "actions/queryPaneActions";
-import {
   getCurrentEnvironmentDetails,
   getCurrentEnvironmentName,
-} from "@appsmith/selectors/environmentSelectors";
-import { EVAL_WORKER_ACTIONS } from "@appsmith/workers/Evaluation/evalWorkerActions";
-import { getIsActionCreatedInApp } from "@appsmith/utils/getIsActionCreatedInApp";
-import type { OtlpSpan } from "UITelemetry/generateTraces";
+} from "ee/selectors/environmentSelectors";
+import { getIsActionCreatedInApp } from "ee/utils/getIsActionCreatedInApp";
 import {
   endSpan,
   setAttributesToSpan,
   startRootSpan,
-} from "UITelemetry/generateTraces";
+} from "instrumentation/generateTraces";
 import {
   getActionExecutionAnalytics,
   getActionProperties,
   getJSActionPathNameToDisplay,
   getPluginActionNameToDisplay,
-} from "@appsmith/utils/actionExecutionUtils";
+} from "ee/utils/actionExecutionUtils";
 import type { JSAction, JSCollection } from "entities/JSCollection";
 import { getAllowedActionAnalyticsKeys } from "constants/AppsmithActionConstants/formConfig/ActionAnalyticsConfig";
-import { setApiPaneDebuggerState } from "../../actions/apiPaneActions";
+import {
+  changeQuery,
+  isActionDirty,
+  isActionSaving,
+  setPluginActionEditorDebuggerState,
+} from "PluginActionEditor/store";
+import { objectKeys } from "@appsmith/utils";
+import type { Span } from "instrumentation/types";
+import {
+  selectGitConnectModalOpen,
+  selectGitOpsModalOpen,
+} from "selectors/gitModSelectors";
 
 enum ActionResponseDataTypes {
   BINARY = "BINARY",
@@ -198,18 +188,22 @@ export const getActionTimeout = (
   actionId: string,
 ): number | undefined => {
   const action = find(state.entities.actions, (a) => a.config.id === actionId);
+
   if (action) {
     const timeout = get(
       action,
       "config.actionConfiguration.timeoutInMillisecond",
       DEFAULT_EXECUTE_ACTION_TIMEOUT_MS,
     );
+
     if (timeout) {
       // Extra timeout padding to account for network calls
       return timeout + 5000;
     }
+
     return undefined;
   }
+
   return undefined;
 };
 
@@ -217,8 +211,10 @@ const createActionExecutionResponse = (
   response: ActionExecutionResponse,
 ): ActionResponse => {
   const payload = response.data;
+
   if (payload.statusCode === "200 OK" && payload.hasOwnProperty("headers")) {
     const respHeaders = payload.headers;
+
     if (
       respHeaders.hasOwnProperty(RESP_HEADER_DATATYPE) &&
       respHeaders[RESP_HEADER_DATATYPE].length > 0 &&
@@ -231,6 +227,7 @@ const createActionExecutionResponse = (
       payload.body = atob(payload.body as string);
     }
   }
+
   return {
     ...payload,
     ...response.clientMeta,
@@ -245,12 +242,15 @@ const isErrorResponse = (response: ActionExecutionResponse) => {
  * @param blobUrl string A blob url with type added a query param
  * @returns promise that resolves to file content
  */
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function* readBlob(blobUrl: string): any {
   const [url, fileType] = parseBlobUrl(blobUrl);
   const file = yield fetch(url).then(async (r) => r.blob());
 
   return yield new Promise((resolve) => {
     const reader = new FileReader();
+
     if (fileType === FileDataTypes.Base64) {
       reader.readAsDataURL(file);
     } else if (fileType === FileDataTypes.Binary) {
@@ -267,6 +267,7 @@ function* readBlob(blobUrl: string): any {
     } else {
       reader.readAsText(file);
     }
+
     reader.onloadend = () => {
       resolve(reader.result);
     };
@@ -282,9 +283,15 @@ function* readBlob(blobUrl: string): any {
  * - binds dataype to payload
  *
  * @param value
+ * @param executeActionRequest
+ * @param index
+ * @param isArray
+ * @param arrDatatype
  */
 
 function* resolvingBlobUrls(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any,
   executeActionRequest: ExecuteActionRequest,
   index: number,
@@ -293,6 +300,7 @@ function* resolvingBlobUrls(
 ) {
   //Get datatypes of evaluated value.
   const dataType: string = findDatatype(value);
+
   //If array elements then dont push datatypes to payload.
   isArray
     ? arrDatatype?.push(dataType)
@@ -302,7 +310,8 @@ function* resolvingBlobUrls(
 
   if (isTrueObject(value)) {
     const blobUrlPaths: string[] = [];
-    Object.keys(value).forEach((propertyName) => {
+
+    objectKeys(value).forEach((propertyName) => {
       if (isBlobUrl(value[propertyName])) {
         blobUrlPaths.push(propertyName);
       }
@@ -311,6 +320,7 @@ function* resolvingBlobUrls(
     for (const blobUrlPath of blobUrlPaths) {
       const blobUrl = value[blobUrlPath] as string;
       const resolvedBlobValue: unknown = yield call(readBlob, blobUrl);
+
       set(value, blobUrlPath, resolvedBlobValue);
 
       // We need to store the url path map to be able to update the blob data
@@ -321,6 +331,7 @@ function* resolvingBlobUrls(
         string,
         string
       >;
+
       set(blobUrlPathMap, blobUrlPath, blobUrl);
       set(value, "blobUrlPaths", blobUrlPathMap);
     }
@@ -336,6 +347,8 @@ function* resolvingBlobUrls(
 // uploads
 function updateBlobDataFromUrls(
   blobUrlPaths: Record<string, string>,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   newVal: any,
   blobMap: string[],
   blobDataMap: Record<string, Blob>,
@@ -346,6 +359,7 @@ function updateBlobDataFromUrls(
       if (isArrayBuffer(newVal[path])) {
         // remove the ?type=binary from the blob url if present
         const sanitisedBlobURL = blobUrl.split("?")[0];
+
         blobMap.push(sanitisedBlobURL);
         set(blobDataMap, sanitisedBlobURL, new Blob([newVal[path]]));
         set(newVal, path, sanitisedBlobURL);
@@ -381,6 +395,9 @@ function updateBlobDataFromUrls(
  *   { key: "this.params.age", value: 26 },
  * ]
  * @param bindings
+ * @param formData
+ * @param executeActionRequest
+ * @param filePickerInstrumentation
  * @param executionParams
  */
 function* evaluateActionParams(
@@ -388,27 +405,30 @@ function* evaluateActionParams(
   formData: FormData,
   executeActionRequest: ExecuteActionRequest,
   filePickerInstrumentation: FilePickerInstumentationObject,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   executionParams?: Record<string, any> | string,
 ) {
   if (isNil(bindings) || bindings.length === 0) {
     formData.append("executeActionDTO", JSON.stringify(executeActionRequest));
+
     return [];
   }
+
   // Evaluated all bindings of the actions. Pass executionParams if any
   // @ts-expect-error: Values can take many types
   const values = yield call(evaluateActionBindings, bindings, executionParams);
 
   const bindingsMap: Record<string, string> = {};
   const bindingBlob = [];
+  const evaluatedParams = zipObject(bindings, values);
 
   // Maintain a blob data map to resolve blob urls of large files as array buffer
   const blobDataMap: Record<string, Blob> = {};
 
-  let recordFilePickerInstrumentation = false;
-
   // if json bindings have filepicker reference, we need to init the instrumentation object
   // which we will send post execution
-  recordFilePickerInstrumentation = bindings.some((binding) =>
+  const recordFilePickerInstrumentation = bindings.some((binding) =>
     binding.includes(".files"),
   );
 
@@ -424,8 +444,15 @@ function* evaluateActionParams(
     if (isArray(value)) {
       const tempArr = [];
       const arrDatatype: Array<string> = [];
+
       // array of objects containing blob urls that is loops and individual object is checked for resolution of blob urls.
-      for (const val of value) {
+
+      const BATCH_CHUNK_SIZE = 100;
+
+      for (let j = 0; j < value.length; j++) {
+        const val = value[j];
+        // TODO: Fix this the next time the file is edited
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const newVal: Record<string, any> = yield call(
           resolvingBlobUrls,
           val,
@@ -444,6 +471,7 @@ function* evaluateActionParams(
           );
           useBlobMaps = true;
           unset(newVal, "blobUrlPaths");
+          evaluatedParams[key] = "blob";
         }
 
         tempArr.push(newVal);
@@ -451,11 +479,19 @@ function* evaluateActionParams(
         if (key.includes(".files") && recordFilePickerInstrumentation) {
           filePickerInstrumentation["numberOfFiles"] += 1;
           const { size, type } = newVal;
+
           filePickerInstrumentation["totalSize"] += size;
           filePickerInstrumentation["fileSizes"].push(size);
           filePickerInstrumentation["fileTypes"].push(type);
+          evaluatedParams[key] = "file";
+        }
+
+        if ((j + 1) % BATCH_CHUNK_SIZE === 0) {
+          // Yield control back to the event loop and empty the stack trace
+          yield delay(0);
         }
       }
+
       //Adding array datatype along with the datatype of first element of the array
       executeActionRequest.paramProperties[`k${i}`] = {
         datatype: { array: [arrDatatype[0]] },
@@ -464,11 +500,13 @@ function* evaluateActionParams(
     } else {
       // @ts-expect-error: Values can take many types
       value = yield call(resolvingBlobUrls, value, executeActionRequest, i);
+
       if (key.includes(".files") && recordFilePickerInstrumentation) {
         filePickerInstrumentation["numberOfFiles"] += 1;
         filePickerInstrumentation["totalSize"] += value.size;
         filePickerInstrumentation["fileSizes"].push(value.size);
         filePickerInstrumentation["fileTypes"].push(value.type);
+        evaluatedParams[key] = "file";
       }
     }
 
@@ -478,9 +516,11 @@ function* evaluateActionParams(
       if (!!value && value.hasOwnProperty("blobUrlPaths")) {
         updateBlobDataFromUrls(value.blobUrlPaths, value, blobMap, blobDataMap);
         unset(value, "blobUrlPaths");
+        evaluatedParams[key] = "blob";
       }
 
       value = JSON.stringify(value);
+      evaluatedParams[key] = value;
     }
 
     // If there are no blob urls in the value, we can directly add it to the formData
@@ -488,12 +528,14 @@ function* evaluateActionParams(
     if (!useBlobMaps) {
       value = new Blob([value], { type: "text/plain" });
     }
+
     bindingsMap[key] = `k${i}`;
     bindingBlob.push({ name: `k${i}`, value: value });
 
     // We need to add the blob map to the param properties
     // This will allow the server to handle the scenaio of large files upload using blob data
     const paramProperties = executeActionRequest.paramProperties[`k${i}`];
+
     if (!!paramProperties && typeof paramProperties === "object") {
       paramProperties["blobIdentifiers"] = blobMap;
     }
@@ -511,6 +553,8 @@ function* evaluateActionParams(
       formData.append(path, blobData),
     );
   }
+
+  return evaluatedParams;
 }
 
 export default function* executePluginActionTriggerSaga(
@@ -520,6 +564,7 @@ export default function* executePluginActionTriggerSaga(
   const span = startRootSpan("executePluginActionTriggerSaga");
   const { payload: pluginPayload } = pluginAction;
   const { actionId, onError, params } = pluginPayload;
+
   if (getType(params) !== Types.OBJECT) {
     throw new ActionValidationError(
       "RUN_PLUGIN_ACTION",
@@ -528,13 +573,6 @@ export default function* executePluginActionTriggerSaga(
       getType(params),
     );
   }
-  PerformanceTracker.startAsyncTracking(
-    PerformanceTransactionName.EXECUTE_ACTION,
-    {
-      actionId: actionId,
-    },
-    actionId,
-  );
 
   setAttributesToSpan(span, {
     actionId: actionId,
@@ -544,6 +582,8 @@ export default function* executePluginActionTriggerSaga(
     yield select(getAction, actionId),
     `Action not found for id - ${actionId}`,
   );
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const datasourceId: string = (action?.datasource as any)?.id;
   const plugin: Plugin = yield select(getPlugin, action?.pluginId);
   const currentApp: ApplicationPayload = yield select(getCurrentApplication);
@@ -561,6 +601,7 @@ export default function* executePluginActionTriggerSaga(
     currentApp,
     datasourceId,
   );
+
   AnalyticsUtil.logEvent("EXECUTE_ACTION", actionExecutionAnalytics);
   const pagination =
     eventType === EventType.ON_NEXT_PAGE
@@ -568,15 +609,7 @@ export default function* executePluginActionTriggerSaga(
       : eventType === EventType.ON_PREV_PAGE
         ? "PREV"
         : undefined;
-  AppsmithConsole.info({
-    text: "Execution started from widget request",
-    source: {
-      type: ENTITY_TYPE.ACTION,
-      name: pluginActionNameToDisplay,
-      id: actionId,
-    },
-    state: action.actionConfiguration,
-  });
+
   const executePluginActionResponse: ExecutePluginActionResponse = yield call(
     executePluginActionSaga,
     action,
@@ -594,7 +627,7 @@ export default function* executePluginActionTriggerSaga(
           id: actionId,
           iconId: action.pluginId,
           logType: LOG_TYPE.ACTION_EXECUTION_ERROR,
-          text: `Execution failed with status ${payload.statusCode}`,
+          text: `Failed execution in ${payload.duration}(ms)`,
           environmentName: currentEnvDetails.name,
           source: {
             type: ENTITY_TYPE.ACTION,
@@ -603,21 +636,12 @@ export default function* executePluginActionTriggerSaga(
             httpMethod: action?.actionConfiguration?.httpMethod,
             pluginType: action.pluginType,
           },
-          state: payload.request,
-          messages: [
-            {
-              // Need to stringify cause this gets rendered directly
-              // and rendering objects can crash the app
-              message: {
-                name: "PluginExecutionError",
-                message: !isString(payload.body)
-                  ? JSON.stringify(payload.body)
-                  : payload.body,
-              },
-              type: PLATFORM_ERROR.PLUGIN_EXECUTION,
-              subType: payload.errorType,
-            },
-          ],
+          state: {
+            error: !isString(payload.body)
+              ? JSON.stringify(payload.body)
+              : payload.body,
+            request: payload.request,
+          },
           pluginErrorDetails: payload.pluginErrorDetails,
         },
       },
@@ -626,6 +650,7 @@ export default function* executePluginActionTriggerSaga(
       ...actionExecutionAnalytics,
       ...payload.pluginErrorDetails,
     });
+
     if (onError) {
       throw new PluginTriggerFailureError(
         createMessage(ERROR_ACTION_EXECUTE_FAIL, pluginActionNameToDisplay),
@@ -641,8 +666,7 @@ export default function* executePluginActionTriggerSaga(
     AnalyticsUtil.logEvent("EXECUTE_ACTION_SUCCESS", actionExecutionAnalytics);
     AppsmithConsole.info({
       logType: LOG_TYPE.ACTION_EXECUTION_SUCCESS,
-      text: "Executed successfully from widget request",
-      timeTaken: payload.duration,
+      text: `Successfully executed in ${payload.duration}(ms)`,
       source: {
         type: ENTITY_TYPE.ACTION,
         name: pluginActionNameToDisplay,
@@ -654,6 +678,7 @@ export default function* executePluginActionTriggerSaga(
       },
     });
   }
+
   return [
     payload.body,
     params,
@@ -668,13 +693,21 @@ export default function* executePluginActionTriggerSaga(
 function* runActionShortcutSaga() {
   const pathname = window.location.pathname;
   const baseMatch = matchBasePath(pathname);
+
   if (!baseMatch) return;
+
   // get gitSyncModal status
-  const isGitSyncModalOpen: boolean = yield select(getIsGitSyncModalOpen);
+  const isGitOpsModalOpen: boolean = yield select(selectGitOpsModalOpen);
+  const isGitConnectModalOpen: boolean = yield select(
+    selectGitConnectModalOpen,
+  );
+
   // if git sync modal is open, prevent action from being executed via shortcut keys.
-  if (isGitSyncModalOpen) return;
+  if (isGitOpsModalOpen || isGitConnectModalOpen) return;
 
   const { path } = baseMatch;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const match: any = matchPath(pathname, {
     path: [
       trimQueryString(`${path}${API_EDITOR_BASE_PATH}`),
@@ -690,19 +723,11 @@ function* runActionShortcutSaga() {
   });
 
   if (!match || !match.params) return;
-  const { apiId, pageId, queryId } = match.params;
-  const actionId = apiId || queryId;
+
+  const { baseApiId, baseQueryId } = match.params;
+  const actionId = baseApiId || baseQueryId;
+
   if (actionId) {
-    const trackerId = apiId
-      ? PerformanceTransactionName.RUN_API_SHORTCUT
-      : PerformanceTransactionName.RUN_QUERY_SHORTCUT;
-    PerformanceTracker.startTracking(trackerId, {
-      actionId,
-      pageId,
-    });
-    AnalyticsUtil.logEvent(trackerId as EventName, {
-      actionId,
-    });
     yield put(runAction(actionId));
   } else {
     return;
@@ -729,6 +754,7 @@ export function* runActionSaga(
   const isSaving: boolean = yield select(isActionSaving(actionId));
   const isDirty: boolean = yield select(isActionDirty(actionId));
   const isSavingEntity: boolean = yield select(getIsSavingEntity);
+
   if (isSaving || isDirty || isSavingEntity) {
     if (isDirty && !isSaving) {
       yield put(updateAction({ id: actionId }));
@@ -748,36 +774,22 @@ export function* runActionSaga(
   const plugin: Plugin = yield select(getPlugin, actionObject?.pluginId);
   const datasource: Datasource = yield select(
     getDatasource,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (actionObject?.datasource as any)?.id,
   );
   const pageName: string = yield select(getCurrentPageNameByActionId, actionId);
 
-  const datasourceUrl = get(
-    actionObject,
-    "datasource.datasourceConfiguration.url",
-  );
-
-  AppsmithConsole.info({
-    text: "Execution started from user request",
-    source: {
-      type: ENTITY_TYPE.ACTION,
-      name: actionObject.name,
-      id: actionId,
-    },
-    state: {
-      ...actionObject.actionConfiguration,
-      ...(datasourceUrl
-        ? {
-            url: datasourceUrl,
-          }
-        : null),
-    },
-  });
-
   const { paginationField } = reduxAction.payload;
+
   // open response tab in debugger on exection of action.
   if (!reduxAction.payload.skipOpeningDebugger) {
-    yield call(openDebugger, plugin.type);
+    yield put(
+      setPluginActionEditorDebuggerState({
+        open: true,
+        selectedTab: DEBUGGER_TAB_KEYS.RESPONSE_TAB,
+      }),
+    );
   }
 
   let payload = EMPTY_RESPONSE;
@@ -798,6 +810,7 @@ export function* runActionSaga(
       true,
       span,
     );
+
     payload = executePluginActionResponse.payload;
     isError = executePluginActionResponse.isError;
   } catch (e) {
@@ -819,12 +832,15 @@ export function* runActionSaga(
           kind: "error",
         },
       );
+
       return;
     }
+
     log.error(e);
     error = { name: (e as Error).name, message: (e as Error).message };
 
     const clientDefinedErrorMetadata = extractClientDefinedErrorMetadata(e);
+
     if (clientDefinedErrorMetadata) {
       set(
         payload,
@@ -911,9 +927,7 @@ export function* runActionSaga(
           iconId: actionObject.pluginId,
           logType: LOG_TYPE.ACTION_EXECUTION_ERROR,
           environmentName: currentEnvDetails.name,
-          text: `Execution failed${
-            payload.statusCode ? ` with status ${payload.statusCode}` : ""
-          }`,
+          text: `Failed execution in ${payload.duration}(ms)`,
           source: {
             type: ENTITY_TYPE.ACTION,
             name: pluginActionNameToDisplay,
@@ -921,8 +935,10 @@ export function* runActionSaga(
             httpMethod: actionObject?.actionConfiguration?.httpMethod,
             pluginType: actionObject.pluginType,
           },
-          messages: appsmithConsoleErrorMessageList,
-          state: payload?.request,
+          state: {
+            error: error.message,
+            request: payload.request,
+          },
           pluginErrorDetails: payload?.pluginErrorDetails,
         },
       },
@@ -950,6 +966,7 @@ export function* runActionSaga(
       ...payload?.pluginErrorDetails,
       source: reduxAction.payload.actionExecutionContext,
     });
+
     return;
   }
 
@@ -972,11 +989,11 @@ export function* runActionSaga(
     type: ReduxActionTypes.RUN_ACTION_SUCCESS,
     payload: { [actionId]: payload },
   });
+
   if (payload.isExecutionSuccess) {
     AppsmithConsole.info({
       logType: LOG_TYPE.ACTION_EXECUTION_SUCCESS,
-      text: "Executed successfully from user request",
-      timeTaken: payload.duration,
+      text: `Successfully executed in ${payload.duration}(ms)`,
       source: {
         type: ENTITY_TYPE.ACTION,
         name: pluginActionNameToDisplay,
@@ -1015,12 +1032,14 @@ function* executeOnPageLoadJSAction(pageAction: PageAction) {
         },
       },
     );
+
     return;
   }
 
   const jsAction = collection.actions.find(
     (action: JSAction) => action.id === pageAction.id,
   );
+
   if (!!jsAction) {
     if (jsAction.confirmBeforeExecute) {
       const jsActionPathNameToDisplay = getJSActionPathNameToDisplay(
@@ -1037,6 +1056,7 @@ function* executeOnPageLoadJSAction(pageAction: PageAction) {
         requestModalConfirmationSaga,
         modalPayload,
       );
+
       if (!confirmed) {
         yield put({
           type: ReduxActionTypes.RUN_ACTION_CANCELLED,
@@ -1054,10 +1074,12 @@ function* executeOnPageLoadJSAction(pageAction: PageAction) {
             kind: "error",
           },
         );
+
         // Don't proceed to executing the js function
         return;
       }
     }
+
     const data = {
       action: jsAction,
       collection,
@@ -1071,17 +1093,19 @@ function* executeOnPageLoadJSAction(pageAction: PageAction) {
 
 function* executePageLoadAction(
   pageAction: PageAction,
-  span?: OtlpSpan,
+  span?: Span,
   actionExecutionContext?: ActionExecutionContext,
 ) {
   const currentEnvDetails: { id: string; name: string } = yield select(
     getCurrentEnvironmentDetails,
   );
+
   if (pageAction.hasOwnProperty("collectionId")) {
     yield call(executeOnPageLoadJSAction, pageAction);
   } else {
     const pageId: string | undefined = yield select(getCurrentPageId);
     let currentApp: ApplicationPayload = yield select(getCurrentApplication);
+
     currentApp = currentApp || {};
     const appMode: APP_MODE | undefined = yield select(getAppMode);
 
@@ -1091,9 +1115,12 @@ function* executePageLoadAction(
       `action not found for id - ${pageAction.id}`,
     );
 
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const datasourceId: string = (action?.datasource as any)?.id;
     const datasource: Datasource = yield select(getDatasource, datasourceId);
     const plugin: Plugin = yield select(getPlugin, action?.pluginId);
+
     AnalyticsUtil.logEvent("EXECUTE_ACTION", {
       type: pageAction.pluginType,
       name: pageAction.name,
@@ -1136,6 +1163,7 @@ function* executePageLoadAction(
           undefined,
           span,
         );
+
       payload = executePluginActionResponse.payload;
       isError = executePluginActionResponse.isError;
     } catch (e) {
@@ -1148,10 +1176,16 @@ function* executePageLoadAction(
         };
       }
     }
+
     // open response tab in debugger on exection of action on page load.
     // Only if current page is the page on which the action is executed.
     if (window.location.pathname.includes(pageAction.id))
-      yield call(openDebugger, plugin.type);
+      yield put(
+        setPluginActionEditorDebuggerState({
+          open: true,
+          selectedTab: DEBUGGER_TAB_KEYS.RESPONSE_TAB,
+        }),
+      );
 
     if (isError) {
       AppsmithConsole.addErrors([
@@ -1161,7 +1195,7 @@ function* executePageLoadAction(
             iconId: action.pluginId,
             logType: LOG_TYPE.ACTION_EXECUTION_ERROR,
             environmentName: currentEnvDetails.name,
-            text: `Execution failed with status ${payload.statusCode}`,
+            text: `Failed execution in ${payload.duration}(ms)`,
             source: {
               type: ENTITY_TYPE.ACTION,
               name: actionName,
@@ -1169,14 +1203,12 @@ function* executePageLoadAction(
               httpMethod: action?.actionConfiguration?.httpMethod,
               pluginType: action.pluginType,
             },
-            state: payload.request,
-            messages: [
-              {
-                message: error,
-                type: PLATFORM_ERROR.PLUGIN_EXECUTION,
-                subType: payload.errorType,
-              },
-            ],
+            state: {
+              error:
+                payload.pluginErrorDetails?.downstreamErrorMessage ||
+                error.message,
+              request: payload.request,
+            },
             pluginErrorDetails: payload.pluginErrorDetails,
           },
         },
@@ -1191,13 +1223,6 @@ function* executePageLoadAction(
         }),
       );
 
-      PerformanceTracker.stopAsyncTracking(
-        PerformanceTransactionName.EXECUTE_ACTION,
-        {
-          failed: true,
-        },
-        pageAction.id,
-      );
       AnalyticsUtil.logEvent("EXECUTE_ACTION_FAILURE", {
         type: pageAction.pluginType,
         name: actionName,
@@ -1240,11 +1265,6 @@ function* executePageLoadAction(
           ? actionExecutionContext
           : ActionExecutionContext.PAGE_LOAD,
       });
-      PerformanceTracker.stopAsyncTracking(
-        PerformanceTransactionName.EXECUTE_ACTION,
-        undefined,
-        pageAction.id,
-      );
 
       yield take(ReduxActionTypes.SET_EVALUATED_TREE);
     }
@@ -1257,19 +1277,18 @@ function* executePageLoadActionsSaga(
   }>,
 ) {
   const span = startRootSpan("executePageLoadActionsSaga");
+
   try {
     const pageActions: PageAction[][] = yield select(getLayoutOnLoadActions);
     const layoutOnLoadActionErrors: LayoutOnLoadActionErrors[] = yield select(
       getLayoutOnLoadIssues,
     );
     const actionCount = flatten(pageActions).length;
+
     setAttributesToSpan(span, { numActions: actionCount });
+
     // when cyclical depedency issue is there,
     // none of the page load actions would be executed
-    PerformanceTracker.startAsyncTracking(
-      PerformanceTransactionName.EXECUTE_PAGE_LOAD_ACTIONS,
-      { numActions: actionCount },
-    );
     for (const actionSet of pageActions) {
       // Load all sets in parallel
       // @ts-expect-error: no idea how to type this
@@ -1284,18 +1303,15 @@ function* executePageLoadActionsSaga(
         ),
       );
     }
-    PerformanceTracker.stopAsyncTracking(
-      PerformanceTransactionName.EXECUTE_PAGE_LOAD_ACTIONS,
-    );
+
     // We show errors in the debugger once onPageLoad actions
     // are executed
     yield put(hideDebuggerErrors(false));
     checkAndLogErrorsIfCyclicDependency(layoutOnLoadActionErrors);
   } catch (e) {
     log.error(e);
-
-    toast.show(createMessage(ERROR_FAIL_ON_PAGE_LOAD_ACTIONS), {
-      kind: "error",
+    AppsmithConsole.error({
+      text: createMessage(ERROR_FAIL_ON_PAGE_LOAD_ACTIONS),
     });
   }
   endSpan(span);
@@ -1317,9 +1333,10 @@ function* executePluginActionSaga(
   paginationField?: PaginationField,
   params?: Record<string, unknown>,
   isUserInitiated?: boolean,
-  parentSpan?: OtlpSpan,
+  parentSpan?: Span,
 ) {
   const actionId = pluginAction.id;
+  const baseActionId = pluginAction.baseId;
   const pluginActionNameToDisplay = getPluginActionNameToDisplay(pluginAction);
 
   setAttributesToSpan(parentSpan, {
@@ -1347,13 +1364,7 @@ function* executePluginActionSaga(
       throw new UserCancelledActionExecutionError();
     }
   }
-  PerformanceTracker.startAsyncTracking(
-    PerformanceTransactionName.EXECUTE_ACTION,
-    {
-      actionId: actionId,
-    },
-    actionId,
-  );
+
   yield put(executePluginActionRequest({ id: actionId }));
 
   const appMode: APP_MODE | undefined = yield select(getAppMode);
@@ -1383,7 +1394,7 @@ function* executePluginActionSaga(
     fileSizes: [],
   };
 
-  yield call(
+  const evaluatedBindings: Record<string, unknown> = yield call(
     evaluateActionParams,
     pluginAction.jsonPathKeys,
     formData,
@@ -1392,21 +1403,31 @@ function* executePluginActionSaga(
     params,
   );
 
+  AppsmithConsole.info({
+    text: "Began execution",
+    source: {
+      type: ENTITY_TYPE.ACTION,
+      name: pluginAction.name,
+      id: actionId,
+    },
+    state: { requestParams: { ...params, ...evaluatedBindings } },
+  });
+
   let payload = EMPTY_RESPONSE;
   let response: ActionExecutionResponse;
+
   try {
-    response = yield ActionAPI.executeAction(formData, timeout, parentSpan);
+    response = yield ActionAPI.executeAction(formData, timeout);
 
     const isError = isErrorResponse(response);
-    PerformanceTracker.stopAsyncTracking(
-      PerformanceTransactionName.EXECUTE_ACTION,
-    );
+
     yield validateResponse(response);
     payload = createActionExecutionResponse(response);
 
     yield put(
       executePluginActionSuccess({
         id: actionId,
+        baseId: baseActionId,
         response: payload,
         isActionCreatedInApp: getIsActionCreatedInApp(pluginAction),
       }),
@@ -1427,6 +1448,7 @@ function* executePluginActionSaga(
     // TODO: Plugins are not always fetched before on page load actions are executed.
     try {
       let plugin: Plugin | undefined;
+
       if (!!pluginAction.pluginId) {
         plugin = shouldBeDefined<Plugin>(
           yield select(getPlugin, pluginAction.pluginId),
@@ -1450,11 +1472,14 @@ function* executePluginActionSaga(
         response.clientMeta.duration,
       );
     }
+
     return {
       payload,
       isError,
     };
   } catch (e) {
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if ("clientDefinedError" in (e as any)) {
       // Case: error from client side validation
       if (filePickerInstrumentation.numberOfFiles > 0) {
@@ -1467,12 +1492,14 @@ function* executePluginActionSaga(
           "NA",
         );
       }
+
       throw e;
     }
 
     yield put(
       executePluginActionSuccess({
         id: actionId,
+        baseId: baseActionId,
         response: EMPTY_RESPONSE,
         isActionCreatedInApp: getIsActionCreatedInApp(pluginAction),
       }),
@@ -1489,6 +1516,7 @@ function* executePluginActionSaga(
         parentSpan,
       ),
     );
+
     if (e instanceof UserCancelledActionExecutionError) {
       // Case: user cancelled the request of file upload
       if (filePickerInstrumentation.numberOfFiles > 0) {
@@ -1501,6 +1529,7 @@ function* executePluginActionSaga(
           "NA",
         );
       }
+
       throw new UserCancelledActionExecutionError();
     }
 
@@ -1517,12 +1546,15 @@ function* executePluginActionSaga(
         "NA",
       );
     }
+
     throw new PluginActionExecutionError("Response not valid", false);
   }
 }
 
 // Function to send the file upload event to segment
 function triggerFileUploadInstrumentation(
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   filePickerInfo: Record<string, any>,
   status: string,
   statusCode: string,
@@ -1531,6 +1563,7 @@ function triggerFileUploadInstrumentation(
   timeTaken: string,
 ) {
   const { fileSizes, fileTypes, numberOfFiles, totalSize } = filePickerInfo;
+
   AnalyticsUtil.logEvent("FILE_UPLOAD_COMPLETE", {
     totalSize,
     fileSizes,
@@ -1544,26 +1577,10 @@ function triggerFileUploadInstrumentation(
   });
 }
 
-//Open debugger with response tab selected.
-function* openDebugger(pluginType: PluginType) {
-  if (pluginType === PluginType.API) {
-    yield put(
-      setApiPaneDebuggerState({
-        open: true,
-        selectedTab: DEBUGGER_TAB_KEYS.RESPONSE_TAB,
-      }),
-    );
-  } else {
-    setQueryPaneDebuggerState({
-      open: true,
-      selectedTab: DEBUGGER_TAB_KEYS.RESPONSE_TAB,
-    });
-  }
-}
-
 // Function to clear the action responses for the actions which are not executeOnLoad.
 function* clearTriggerActionResponse() {
   const currentPageActions: ActionData[] = yield select(getCurrentActions);
+
   for (const action of currentPageActions) {
     // Clear the action response if the action has data and is not executeOnLoad.
     if (action.data && !action.config.executeOnLoad) {
@@ -1586,8 +1603,9 @@ function* softRefreshActionsSaga() {
   //get current pageId
   const pageId: string = yield select(getCurrentPageId);
   const applicationId: string = yield select(getCurrentApplicationId);
+
   // Fetch the page data before refreshing the actions.
-  yield put(fetchPage(pageId));
+  yield put(fetchPageAction(pageId));
   //wait for the page to be fetched.
   yield take([
     ReduxActionErrorTypes.FETCH_PAGE_ERROR,
@@ -1615,35 +1633,26 @@ function* softRefreshActionsSaga() {
   //This will refresh the query editor with the latest datasource structure.
   // TODO: fix typing of matchQueryBuilderPath, it always returns "any" which can lead to bugs
   const isQueryPane = matchQueryBuilderPath(window.location.pathname);
+
   //This is reuired only when the query editor is open.
   if (isQueryPane) {
+    const basePageId: string = yield select(getCurrentBasePageId);
+
     yield put(
       changeQuery({
-        id: isQueryPane.params.queryId,
-        pageId,
+        baseQueryId: isQueryPane.params.baseQueryId,
+        basePageId,
         applicationId,
       }),
     );
   }
+
   const currentEnvName: string = yield select(getCurrentEnvironmentName);
+
   toast.show(createMessage(SWITCH_ENVIRONMENT_SUCCESS, currentEnvName), {
     kind: "success",
   });
   yield put({ type: ReduxActionTypes.SWITCH_ENVIRONMENT_SUCCESS });
-}
-
-function* handleUpdateActionData(
-  action: ReduxAction<updateActionDataPayloadType>,
-) {
-  const { actionDataPayload, parentSpan } = action.payload;
-  yield call(
-    evalWorker.request,
-    EVAL_WORKER_ACTIONS.UPDATE_ACTION_DATA,
-    actionDataPayload,
-  );
-  if (parentSpan) {
-    endSpan(parentSpan);
-  }
 }
 
 export function* watchPluginActionExecutionSagas() {
@@ -1658,7 +1667,5 @@ export function* watchPluginActionExecutionSagas() {
       executePageLoadActionsSaga,
     ),
     takeLatest(ReduxActionTypes.PLUGIN_SOFT_REFRESH, softRefreshActionsSaga),
-    takeEvery(ReduxActionTypes.EXECUTE_JS_UPDATES, makeUpdateJSCollection),
-    takeEvery(ReduxActionTypes.UPDATE_ACTION_DATA, handleUpdateActionData),
   ]);
 }

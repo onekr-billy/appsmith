@@ -89,7 +89,7 @@ export class HomePage {
   private _workspaceImport = "[data-testid=t--workspace-import-app]";
   public _uploadFile = "//div/form/input";
   private _importSuccessModal = ".t--import-app-success-modal";
-  private _forkModal = ".fork-modal";
+  public _forkModal = ".fork-modal";
   public _appCard = (applicationName: string) =>
     "//span[text()='" +
     applicationName +
@@ -129,7 +129,6 @@ export class HomePage {
   private _backToEditor = ".t--back-to-editor";
   private _editorSidebar = ".t--sidebar-Editor";
   private _membersTab = "[data-testid=t--tab-members]";
-
   public _searchWorkspaceLocator = (workspaceName: string) =>
     `[data-testid="${workspaceName}"]`;
   public SwitchToAppsTab() {
@@ -306,6 +305,7 @@ export class HomePage {
     this.agHelper.GetNClick(this._newButtonCreateApplication, 0, true);
     this.AssertApplicationCreated();
     if (skipSignposting) {
+      this.agHelper.WaitUntilEleDisappear(this.locator._btnSpinner);
       AppSidebar.assertVisible();
       this.agHelper.AssertElementVisibility(PageLeftPane.locators.selector);
       this.onboarding.skipSignposting();

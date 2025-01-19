@@ -1,10 +1,14 @@
-import { useTable, useSortBy, useExpanded } from "react-table";
+import {
+  useTable,
+  useSortBy,
+  useExpanded,
+  type Row as ReactTableRow,
+} from "react-table";
 import React from "react";
 import styled from "styled-components";
 import { Classes } from "../constants/classes";
 import { typography } from "../constants/typography";
-import Spinner from "../Spinner";
-import { IconSize } from "../Icon";
+import { Spinner } from "@appsmith/ads";
 import { importSvg } from "../utils/icon-loadables";
 
 const DownArrow = importSvg(
@@ -135,13 +139,22 @@ const TableColumnEmptyWrapper = styled.div`
     margin-top: 23px;
   }
 `;
+
 export interface TableProps {
   data: any[];
   columns: any[];
   isLoading?: boolean;
   loaderComponent?: JSX.Element;
   noDataComponent?: JSX.Element;
+  RowComponent?: React.ComponentType<any>;
 }
+
+const Row = ({
+  children,
+  ...props
+}: React.ComponentProps<"tr"> & { row: ReactTableRow<object> }) => {
+  return <tr {...props}>{children}</tr>;
+};
 
 function Table(props: TableProps) {
   const {
@@ -150,6 +163,7 @@ function Table(props: TableProps) {
     isLoading = false,
     loaderComponent,
     noDataComponent,
+    RowComponent = Row,
   } = props;
 
   const { getTableBodyProps, getTableProps, headerGroups, prepareRow, rows } =
@@ -192,19 +206,16 @@ function Table(props: TableProps) {
             <tr className="no-hover">
               <td className="no-border" colSpan={columns?.length}>
                 <CentralizedWrapper>
-                  {loaderComponent ? (
-                    loaderComponent
-                  ) : (
-                    <Spinner size={IconSize.XXL} />
-                  )}
+                  {loaderComponent ? loaderComponent : <Spinner size="lg" />}
                 </CentralizedWrapper>
               </td>
             </tr>
           ) : rows.length > 0 ? (
             rows.map((row, index) => {
               prepareRow(row);
+
               return (
-                <tr {...row.getRowProps()} key={index}>
+                <RowComponent {...row.getRowProps()} key={index} row={row}>
                   {row.cells.map((cell, index) => {
                     return (
                       <td
@@ -216,7 +227,7 @@ function Table(props: TableProps) {
                       </td>
                     );
                   })}
-                </tr>
+                </RowComponent>
               );
             })
           ) : (

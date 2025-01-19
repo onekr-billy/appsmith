@@ -35,6 +35,8 @@ import { FlexVerticalAlignment } from "layoutSystems/common/utils/constants";
 
 export function defaultSelectedValuesValidation(
   value: unknown,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   props: any,
 ): ValidationResponse {
   let values: string[] = [];
@@ -52,6 +54,7 @@ export function defaultSelectedValuesValidation(
       }
     } catch {
       values = value.length ? value.split(",") : [];
+
       if (values.length > 0) {
         values = values.map((_v: string) => _v.trim());
       }
@@ -604,6 +607,8 @@ class CheckboxGroupWidget extends BaseWidget<
     };
   }
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static getMetaPropertiesMap(): Record<string, any> {
     return {
       selectedValues: undefined,
@@ -630,6 +635,7 @@ class CheckboxGroupWidget extends BaseWidget<
       (value: string) =>
         prevProps.options.some((option) => option.value === value),
     );
+
     if (validSelectedValues.length !== prevProps.selectedValues.length) {
       this.props.updateWidgetMetaProperty(
         "selectedValues",
@@ -709,6 +715,7 @@ class CheckboxGroupWidget extends BaseWidget<
     return (event: React.FormEvent<HTMLElement>) => {
       let { selectedValues = [] } = this.props;
       const isChecked = (event.target as HTMLInputElement).checked;
+
       if (isChecked) {
         selectedValues = [...selectedValues, value];
       } else {

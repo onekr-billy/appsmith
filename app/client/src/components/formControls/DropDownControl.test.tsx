@@ -14,6 +14,8 @@ const initialValues = {
   },
 };
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TestForm(props: any) {
   return <div>{props.children}</div>;
 }
@@ -59,6 +61,8 @@ const dropDownProps = {
 };
 
 describe("DropDownControl", () => {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let store: any;
 
   beforeEach(() => {
@@ -88,6 +92,7 @@ describe("DropDownControl", () => {
 
     const options = screen.getAllByText(/Optio.../);
     const optionCount = options.length;
+
     expect(optionCount).toBe(2);
   });
 
@@ -108,6 +113,7 @@ describe("DropDownControl", () => {
 
     await waitFor(() => {
       const options = screen.queryAllByText(/Option.../);
+
       expect(options.length).toBe(0);
     });
   });

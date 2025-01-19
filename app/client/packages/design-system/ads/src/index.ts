@@ -36,3 +36,5 @@ export * from "./Toast";
 export * from "./ToggleButton";
 export * from "./Tooltip";
 export * from "./ToggleButtonGroup";
+export * from "./Templates";
+export * from "./Badge";

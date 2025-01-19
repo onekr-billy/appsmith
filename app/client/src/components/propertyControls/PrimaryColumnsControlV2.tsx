@@ -1,11 +1,11 @@
-import type { AppState } from "@appsmith/reducers";
+import type { AppState } from "ee/reducers";
 import * as Sentry from "@sentry/react";
 import type { CodeEditorExpected } from "components/editorComponents/CodeEditor";
 import { EditorTheme } from "components/editorComponents/CodeEditor/EditorConfig";
 import EvaluatedValuePopup from "components/editorComponents/CodeEditor/EvaluatedValuePopup";
 import { DraggableListCard } from "components/propertyControls/DraggableListCard";
 import type { Indices } from "constants/Layers";
-import { Button } from "design-system";
+import { Button } from "@appsmith/ads";
 import type { DataTree } from "entities/DataTree/dataTreeTypes";
 import _, { toString as lodashToString } from "lodash";
 import { DraggableListControl } from "pages/Editor/PropertyPane/DraggableListControl";
@@ -43,6 +43,8 @@ const EmptyStateLabel = styled.div`
 
 interface ReduxStateProps {
   dynamicData: DataTree;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   datasources: any;
   errors: EvaluationError[];
 }
@@ -52,6 +54,8 @@ interface EvaluatedValueProps {
   popperPlacement?: Placement;
   popperZIndex?: Indices;
   dataTreePath?: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluatedValue?: any;
   expected?: CodeEditorExpected;
   hideEvaluatedValue?: boolean;
@@ -72,6 +76,7 @@ const getOriginalColumn = (
   const column: ColumnProperties | undefined = Object.values(
     reorderedColumns,
   ).find((column: ColumnProperties) => column.index === index);
+
   return column;
 };
 
@@ -84,6 +89,7 @@ interface State {
 }
 
 const LIST_CLASSNAME = "tablewidgetv2-primarycolumn-list";
+
 class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
   constructor(props: ControlProps) {
     super(props);
@@ -97,6 +103,7 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
     for (let index = 0; index < tableColumnLabels.length; index++) {
       const currLabel = tableColumnLabels[index] as string;
       const duplicateValueIndex = tableColumnLabels.indexOf(currLabel);
+
       if (duplicateValueIndex !== index) {
         // get column id from columnOrder index
         duplicateColumnIds.push(reorderedColumns[columnOrder[index]].id);
@@ -146,6 +153,7 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
     if (Object.keys(columns).length === 0) {
       return <EmptyStateLabel>Table columns will appear here</EmptyStateLabel>;
     }
+
     // Get an empty array of length of columns
     let columnOrder: string[] = new Array(Object.keys(columns).length);
 
@@ -208,6 +216,8 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
               keyAccessor="id"
               onEdit={this.onEdit}
               propertyPath={this.props.dataTreePath}
+              // TODO: Fix this the next time the file is edited
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               renderComponent={(props: any) =>
                 DraggableListCard({
                   ...props,
@@ -304,8 +314,11 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
   }[] => {
     const updates: {
       propertyName: string;
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       propertyValue: any;
     }[] = [];
+
     updates.push({
       propertyName: `${propertyName}.${column.id}.isEditable`,
       propertyValue: checked,
@@ -322,6 +335,7 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
         propertyValue: checked,
       });
     }
+
     return updates;
   };
   toggleCheckbox = (index: number, checked: boolean) => {
@@ -357,12 +371,14 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
       const columnOrderIndex = columnOrder.findIndex(
         (column: string) => column === originalColumn.id,
       );
+
       if (columnOrderIndex > -1)
         propertiesToDelete.push(`columnOrder[${columnOrderIndex}]`);
 
       this.deleteProperties(propertiesToDelete);
       // if column deleted, clean up duplicateIndexes
       let duplicateColumnIds = [...this.state.duplicateColumnIds];
+
       duplicateColumnIds = duplicateColumnIds.filter(
         (id) => id !== originalColumn.id,
       );
@@ -386,6 +402,7 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
       // check entered label is unique or duplicate
       const tableColumnLabels = _.map(columns, "label");
       let duplicateColumnIds = [...this.state.duplicateColumnIds];
+
       // if duplicate, add into array
       if (_.includes(tableColumnLabels, updatedLabel)) {
         duplicateColumnIds.push(originalColumn.id);
@@ -430,6 +447,7 @@ class PrimaryColumnsControlV2 extends BaseControl<ControlProps, State> {
           !isEditable,
         ),
       );
+
     this.batchUpdatePropertiesWithAssociatedUpdates(allUpdates);
 
     if (isEditable) {
@@ -466,6 +484,7 @@ class EvaluatedValuePopupWrapperClass extends Component<EvaluatedValuePopupWrapp
     pathEvaluatedValue: unknown;
   } => {
     const { errors } = this.props;
+
     if (!dataTreePath) {
       return {
         isInvalid: false,
@@ -495,6 +514,7 @@ class EvaluatedValuePopupWrapperClass extends Component<EvaluatedValuePopupWrapp
     const { errors, isInvalid, pathEvaluatedValue } =
       this.getPropertyValidation(dynamicData, dataTreePath);
     let evaluated = evaluatedValue;
+
     if (dataTreePath) {
       evaluated = pathEvaluatedValue;
     }

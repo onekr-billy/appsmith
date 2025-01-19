@@ -272,7 +272,7 @@ const ServerLineIcon = importRemixIcon(
   async () => import("remixicon-react/ServerLineIcon"),
 );
 
-enum Size {
+export enum Size {
   xxs = "xxs",
   xs = "xs",
   small = "small",
@@ -382,6 +382,7 @@ interface cssAttributes {
 
 const appSizeHandler = (size: Size): cssAttributes => {
   let width, height, padding;
+
   switch (size) {
     case Size.small:
       width = 20;
@@ -404,6 +405,7 @@ const appSizeHandler = (size: Size): cssAttributes => {
       padding = 5;
       break;
   }
+
   return { width, height, padding };
 };
 
@@ -426,17 +428,17 @@ const IconWrapper = styled.a<AppIconProps & { styledProps: cssAttributes }>`
 export type AppIconProps = CommonComponentProps & {
   size?: Size;
   name: AppIconName;
-  onClick?: (e: unknown) => void;
+  onClick?: (e: any) => void;
 };
 
 function AppIcon(props: AppIconProps) {
   const styledProps = useMemo(
-    // @ts-expect-error Fix this the next time the file is edited
-    () => appSizeHandler(props.size != null || Size.medium),
+    () => appSizeHandler(props.size || Size.medium),
     [props],
   );
 
   let returnIcon;
+
   switch (props.name) {
     case "bag":
       returnIcon = <BagIcon />;
@@ -709,6 +711,7 @@ function AppIcon(props: AppIconProps) {
       returnIcon = null;
       break;
   }
+
   return returnIcon ? (
     <IconWrapper
       data-cy={props.cypressSelector}

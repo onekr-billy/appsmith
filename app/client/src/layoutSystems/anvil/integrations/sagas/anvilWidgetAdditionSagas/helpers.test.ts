@@ -132,6 +132,7 @@ describe("updateWidgetListWithNewWidget", () => {
         },
       ],
     };
+
     WidgetFactory.widgetDefaultPropertiesMap.get = jest.fn(() => ({
       someRandomProperty: "random",
       widgetName: "widgetName",
@@ -181,6 +182,8 @@ describe("updateWidgetListWithNewWidget", () => {
     };
 
     const result = await expectSaga(
+      // TODO: Fix this the next time the file is edited
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       updateWidgetListWithNewWidget as any,
       params,
       widgets as CanvasWidgetsReduxState,

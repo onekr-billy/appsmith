@@ -31,6 +31,7 @@ export class DarkModeTheme implements ColorModeTheme {
       isYellow,
       lightness,
     } = new ColorsAccessor(color);
+
     this.seedColor = seedColor;
     this.seedLightness = lightness;
     this.seedChroma = chroma;
@@ -61,6 +62,9 @@ export class DarkModeTheme implements ColorModeTheme {
       bgNeutralSubtle: this.bgNeutralSubtle.to("sRGB").toString(),
       bgNeutralSubtleHover: this.bgNeutralSubtleHover.to("sRGB").toString(),
       bgNeutralSubtleActive: this.bgNeutralSubtleActive.to("sRGB").toString(),
+      bgNeutralSoft: this.bgNeutralSoft.to("sRGB").toString(),
+      bgNeutralSoftHover: this.bgNeutralSoftHover.to("sRGB").toString(),
+      bgNeutralSoftActive: this.bgNeutralSoftActive.to("sRGB").toString(),
       bgPositive: this.bgPositive.to("sRGB").toString(),
       bgPositiveHover: this.bgPositiveHover.to("sRGB").toString(),
       bgPositiveActive: this.bgPositiveActive.to("sRGB").toString(),
@@ -154,6 +158,7 @@ export class DarkModeTheme implements ColorModeTheme {
     if (!this.seedIsAchromatic && !this.seedIsCold) {
       color.oklch.c = 0.012;
     }
+
     return color;
   }
 
@@ -306,11 +311,6 @@ export class DarkModeTheme implements ColorModeTheme {
     // Low chroma, but not 0, if possible, to produce harmony with accents in the UI
     const color = this.bgAccent.clone();
 
-    // For darker accents it helps to increase neutral's lightness a little, so it's visible against bg
-    if (this.bgAccent.oklch.l < 0.5) {
-      color.oklch.l += 0.05;
-    }
-
     if (this.seedIsAchromatic) {
       color.oklch.c = 0;
     }
@@ -321,6 +321,18 @@ export class DarkModeTheme implements ColorModeTheme {
 
     if (!this.seedIsCold && !this.seedIsAchromatic) {
       color.oklch.c = 0.01;
+    }
+
+    if (color.oklch.l > 0.8) {
+      color.oklch.l -= 0.32;
+    }
+
+    if (color.oklch.l > 0.6 && color.oklch.l <= 0.8) {
+      color.oklch.l -= 0.27;
+    }
+
+    if (color.oklch.l > 0.45 && color.oklch.l <= 0.6) {
+      color.oklch.l -= 0.2;
     }
 
     return color;
@@ -386,7 +398,7 @@ export class DarkModeTheme implements ColorModeTheme {
   }
 
   private get bgNeutralSubtle() {
-    const color = this.seedColor.clone();
+    const color = this.bgAccentSubtle.clone();
 
     // Adjusted version of bgAccentSubtle (less or no chroma)
     if (this.seedLightness > 0.29) {
@@ -398,8 +410,8 @@ export class DarkModeTheme implements ColorModeTheme {
       color.oklch.l = 0.22;
     }
 
-    if (this.seedChroma > 0.025) {
-      color.oklch.c = 0.025;
+    if (this.seedChroma > 0.005) {
+      color.oklch.c = 0.005;
     }
 
     if (this.seedIsAchromatic) {
@@ -425,6 +437,30 @@ export class DarkModeTheme implements ColorModeTheme {
     return color;
   }
 
+  private get bgNeutralSoft() {
+    const color = this.bgNeutralSubtle.clone();
+
+    color.oklch.l -= 0.03;
+
+    return color;
+  }
+
+  private get bgNeutralSoftHover() {
+    const color = this.bgNeutralSoft.clone();
+
+    color.oklch.l += 0.02;
+
+    return color;
+  }
+
+  private get bgNeutralSoftActive() {
+    const color = this.bgNeutralSoft.clone();
+
+    color.oklch.l -= 0.015;
+
+    return color;
+  }
+
   private get bgPositive() {
     // Positive background, green.
     const color = new Color("oklch", [0.62, 0.17, 145]);
@@ -434,6 +470,7 @@ export class DarkModeTheme implements ColorModeTheme {
       if (this.seedHue < 145) {
         color.oklch.h = 155;
       }
+
       if (this.seedHue >= 145) {
         color.oklch.h = 135;
       }
@@ -494,6 +531,7 @@ export class DarkModeTheme implements ColorModeTheme {
       if (this.seedHue < 27) {
         color.oklch.h = 32;
       }
+
       if (this.seedHue >= 27) {
         color.oklch.h = 22;
       }
@@ -554,6 +592,7 @@ export class DarkModeTheme implements ColorModeTheme {
       if (this.seedHue < 85) {
         color.oklch.h = 95;
       }
+
       if (this.seedHue >= 85) {
         color.oklch.h = 70;
       }
@@ -719,7 +758,7 @@ export class DarkModeTheme implements ColorModeTheme {
     // Neutral foreground. Slightly less prominent than main fg
     const color = this.fg.clone();
 
-    color.oklch.l -= 0.02;
+    color.oklch.l -= 0.1;
 
     return color;
   }
@@ -727,7 +766,7 @@ export class DarkModeTheme implements ColorModeTheme {
   private get fgNeutralSubtle() {
     const color = this.fgNeutral.clone();
 
-    color.oklch.l -= 0.15;
+    color.oklch.l -= 0.3;
 
     return color;
   }
@@ -753,6 +792,7 @@ export class DarkModeTheme implements ColorModeTheme {
   private get fgNegative() {
     // Negative foreground is produced from the initially adjusted background color (see above). Additional tweaks are applied to make sure it's distinct from fgAccent when seed is red.
     const color = this.bgNegative.clone();
+
     color.oklch.l += 0.05;
     color.oklch.c += 0.1;
     color.oklch.h -= 10;
@@ -931,6 +971,7 @@ export class DarkModeTheme implements ColorModeTheme {
     if (this.seedIsAchromatic) {
       color.oklch.c = 0;
     }
+
     // For light content on dark background APCA contrast is negative. −15 is “The absolute minimum for any non-text that needs to be discernible and differentiable, but does not apply to semantic non-text such as icons”.
     if (this.bg.contrastAPCA(this.seedColor) >= -15) {
       color.oklch.l += 0.05;

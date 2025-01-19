@@ -237,6 +237,7 @@ export class ModalWidget extends BaseWidget<ModalWidgetProps, WidgetState> {
               if (layoutSystemType === LayoutSystemTypes.FIXED) {
                 return [];
               }
+
               //get Canvas Widget
               const canvasWidget: FlattenedWidgetProps = get(
                 widget,
@@ -496,6 +497,7 @@ export class ModalWidget extends BaseWidget<ModalWidgetProps, WidgetState> {
         !!this.props.isVisible
       );
     }
+
     return !!this.props.isVisible;
   }
 
@@ -511,6 +513,8 @@ export class ModalWidget extends BaseWidget<ModalWidgetProps, WidgetState> {
     }
   };
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   closeModal = (e: any) => {
     this.props.updateWidgetMetaProperty("isVisible", false);
     this.selectWidgetRequest(SelectionRequestType.Empty);

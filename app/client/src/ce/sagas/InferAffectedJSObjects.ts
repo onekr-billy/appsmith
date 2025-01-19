@@ -1,14 +1,14 @@
-import type {
-  BufferedReduxAction,
-  ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { JS_ACTIONS } from "@appsmith/actions/evaluationActionsList";
-import type { AffectedJSObjects } from "sagas/EvaluationsSagaUtils";
+} from "ee/constants/ReduxActionConstants";
+import { JS_ACTIONS } from "ee/actions/evaluationActionsList";
 import type { JSCollection } from "entities/JSCollection";
+import type {
+  AffectedJSObjects,
+  BufferedReduxAction,
+} from "actions/EvaluationReduxActionTypes";
 
 export function getAffectedJSObjectIdsFromJSAction(
   action: ReduxAction<unknown> | BufferedReduxAction<unknown>,
@@ -62,6 +62,7 @@ function getAffectedJSObjectIdsFromBufferedAction(
       isAllAffected: false,
     };
   }
+
   // only Buffered actions here
   return (
     (action as BufferedReduxAction<unknown>).affectedJSObjects || {

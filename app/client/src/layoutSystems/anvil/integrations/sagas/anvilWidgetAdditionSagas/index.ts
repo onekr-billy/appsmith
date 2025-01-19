@@ -6,12 +6,10 @@ import type {
   AnvilHighlightInfo,
   WidgetLayoutProps,
 } from "layoutSystems/anvil/utils/anvilTypes";
-import {
-  ReduxActionErrorTypes,
-  type ReduxAction,
-} from "@appsmith/constants/ReduxActionConstants";
+import { ReduxActionErrorTypes } from "ee/constants/ReduxActionConstants";
+import { type ReduxAction } from "actions/ReduxActionTypes";
 import type { WidgetProps } from "widgets/BaseWidget";
-import { WDS_V2_WIDGET_MAP } from "widgets/wds/constants";
+import { WDS_V2_WIDGET_MAP } from "modules/ui-builder/ui/wds/constants";
 import { MAIN_CONTAINER_WIDGET_ID } from "constants/WidgetConstants";
 import { getMainCanvasLastRowHighlight } from "../anvilDraggingSagas/helpers";
 import { updateAndSaveAnvilLayout } from "layoutSystems/anvil/utils/anvilChecksUtils";
@@ -27,6 +25,7 @@ import log from "loglevel";
 import { generateDefaultLayoutPreset } from "layoutSystems/anvil/layoutComponents/presets/DefaultLayoutPreset";
 import { addWidgetsToPreset } from "layoutSystems/anvil/utils/layouts/update/additionUtils";
 import { addNewAnvilWidgetToDSL } from "./helpers";
+import { klona } from "klona";
 
 // The suggested widget functionality allows users to bind data from the Query pane
 // to a new or existing widget on the Canvas.
@@ -109,7 +108,8 @@ export function* getUpdatedListOfWidgetsAfterAddingNewWidget(
   isSection: boolean, // Indicates if the drop zone is a section
 ) {
   const { alignment, canvasId } = highlight;
-  const allWidgets: CanvasWidgetsReduxState = yield select(getWidgets);
+  const allWidgetsFromRedux: CanvasWidgetsReduxState = yield select(getWidgets);
+  const allWidgets = klona(allWidgetsFromRedux) as CanvasWidgetsReduxState;
 
   const parentWidgetWithLayout = allWidgets[canvasId];
 
@@ -149,6 +149,7 @@ export function* getUpdatedListOfWidgetsAfterAddingNewWidget(
         highlight,
         updatedWidgets[canvasId],
       );
+
       updatedWidgets = res.canvasWidgets;
     } else {
       // The typical operation when adding widgets to a zone
@@ -160,6 +161,7 @@ export function* getUpdatedListOfWidgetsAfterAddingNewWidget(
       );
     }
   }
+
   return updatedWidgets;
 }
 
@@ -239,6 +241,7 @@ function* addWidgetToGenericLayout(
     updatedWidgets,
     newWidgetContext,
   );
+
   /**
    * Also add it to parent's layout.
    */

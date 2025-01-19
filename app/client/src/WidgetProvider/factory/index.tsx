@@ -42,9 +42,16 @@ import type {
   PasteDestinationInfo,
 } from "layoutSystems/anvil/utils/paste/types";
 import { call } from "redux-saga/effects";
+import type { DerivedPropertiesMap } from "./types";
 
+// exporting it as well so that existing imports are not affected
+// TODO: remove this once all imports are updated
+export type { DerivedPropertiesMap };
+
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WidgetDerivedPropertyType = any;
-export type DerivedPropertiesMap = Record<string, string>;
+
 export type WidgetType = (typeof WidgetFactory.widgetTypes)[number];
 
 class WidgetFactory {
@@ -60,6 +67,8 @@ class WidgetFactory {
 
   static widgetsMap: Map<WidgetType, typeof BaseWidget> = new Map();
 
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static widgetBuilderMap: Map<WidgetType, any> = new Map();
 
   static initialize(
@@ -125,6 +134,7 @@ class WidgetFactory {
       isDeprecated: !!config.isDeprecated,
       replacement: config.replacement,
       displayName: config.name,
+      displayOrder: config.displayOrder,
       key: generateReactKey(),
       iconSVG: config.iconSVG,
       thumbnailSVG: config.thumbnailSVG,
@@ -200,7 +210,9 @@ class WidgetFactory {
         message:
           "Widget Builder not registered for widget type" + widgetData.type,
       };
+
       log.error(ex);
+
       return null;
     }
   }
@@ -246,6 +258,7 @@ class WidgetFactory {
       log.error(
         `Default properties are not defined for widget type: ${widgetType}`,
       );
+
       return {};
     }
   }
@@ -263,6 +276,7 @@ class WidgetFactory {
       return dependencyMap;
     } else {
       log.error(`Dependency map is defined for widget type: ${widgetType}`);
+
       return {};
     }
   }
@@ -282,6 +296,7 @@ class WidgetFactory {
       log.error(
         `Meta properties are not defined for widget type: ${widgetType}`,
       );
+
       return {};
     }
   }
@@ -297,6 +312,7 @@ class WidgetFactory {
       widgetProperties,
     );
     const styleConfig = WidgetFactory.getWidgetPropertyPaneStyleConfig(type);
+
     return [...contentConfig, ...styleConfig];
   }
 
@@ -339,6 +355,7 @@ class WidgetFactory {
 
       if (config === undefined) {
         log.error("Widget property pane config not defined", type);
+
         return [];
       } else {
         return config;
@@ -489,6 +506,7 @@ class WidgetFactory {
                   minHeight:
                     WidgetFactory.widgetConfigMap.get(type)?.minHeight || 80,
                 };
+
               return sizeConfig.configuration(props);
             },
           })) || [],
@@ -497,6 +515,7 @@ class WidgetFactory {
       };
     } else {
       log.error(`Auto layout config is not defined for widget type: ${type}`);
+
       return {
         autoDimension: {},
         widgetSize: [],
@@ -515,11 +534,13 @@ class WidgetFactory {
 
     if (!baseAnvilConfig) {
       log.error(`Anvil config is not defined for widget type: ${type}`);
+
       return {
         isLargeWidget: false,
         widgetSize: {},
       };
     }
+
     return baseAnvilConfig;
   }
 
@@ -527,6 +548,7 @@ class WidgetFactory {
   @freeze
   static getWidgetTypeConfigMap(): WidgetTypeConfigMap {
     const typeConfigMap: WidgetTypeConfigMap = {};
+
     WidgetFactory.getWidgetTypes().forEach((type) => {
       typeConfigMap[type] = {
         defaultProperties: WidgetFactory.getWidgetDefaultPropertiesMap(type),
@@ -534,6 +556,7 @@ class WidgetFactory {
         metaProperties: WidgetFactory.getWidgetMetaPropertiesMap(type),
       };
     });
+
     return typeConfigMap;
   }
 
@@ -550,6 +573,7 @@ class WidgetFactory {
       log.error(
         `Auto complete definitions are not defined for widget type: ${type}`,
       );
+
       return {};
     }
   }
@@ -585,6 +609,7 @@ class WidgetFactory {
       log.error(
         `stylesheet config is not defined for widget type: ${widgetType}`,
       );
+
       return undefined;
     }
   }
@@ -647,6 +672,7 @@ class WidgetFactory {
       widgetIdMap,
       reverseWidgetIdMap,
     );
+
     return res;
   }
 }
@@ -655,6 +681,8 @@ export type WidgetTypeConfigMap = Record<
   string,
   {
     defaultProperties: Record<string, string>;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metaProperties: Record<string, any>;
     derivedProperties: WidgetDerivedPropertyType;
   }

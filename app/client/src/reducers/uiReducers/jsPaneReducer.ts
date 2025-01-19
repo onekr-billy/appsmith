@@ -1,11 +1,11 @@
 import { createReducer } from "utils/ReducerUtils";
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionTypes,
   ReduxActionErrorTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import type { JSCollection } from "entities/JSCollection";
-import { ActionExecutionResizerHeight } from "pages/Editor/APIEditor/constants";
+import { ActionExecutionResizerHeight } from "PluginActionEditor/components/PluginActionResponse/constants";
 
 export enum JSEditorTab {
   CODE = "CODE",
@@ -151,6 +151,7 @@ const jsPaneReducer = createReducer(initialState, {
     action: ReduxAction<{ selectedTab: JSEditorTab }>,
   ) => {
     const { selectedTab } = action.payload;
+
     return {
       ...state,
       selectedConfigTab: selectedTab,

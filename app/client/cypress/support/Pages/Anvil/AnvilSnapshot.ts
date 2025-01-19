@@ -19,7 +19,6 @@ export class AnvilSnapshot {
     densityOptions: "[data-testid=t--anvil-theme-settings-density] > div",
     sizingOptions: "[data-testid=t--anvil-theme-settings-sizing] > div",
     cornersOptions: "[data-testid=t--anvil-theme-settings-corners] > div",
-    iconStyleOptions: "[data-testid=t--anvil-theme-settings-icon-style] > div",
   };
 
   /**
@@ -40,11 +39,7 @@ export class AnvilSnapshot {
       `anvil_${name}$_${mode}${theme == "dark" ? "_dark" : ""}${size ? `_${size}` : ""}`,
     );
 
-    this.agHelper.GetElement(locator).matchImageSnapshot(snapshotName, {
-      comparisonMethod: "ssim",
-      failureThreshold: 0.01,
-      failureThresholdType: "percent",
-    });
+    this.agHelper.GetElement(locator).matchImageSnapshot(snapshotName);
   }
 
   public matchSnapshotForCanvasMode = (
@@ -167,14 +162,6 @@ export class AnvilSnapshot {
     });
   };
 
-  public setIconStyle = (iconStyle: string) => {
-    this.updateThemeOption(() => {
-      cy.get(this.locators.iconStyleOptions)
-        .contains(iconStyle)
-        .click({ force: true });
-    });
-  };
-
   public updateThemeOption = (callback: () => void) => {
     this.appSettings.OpenAppSettings();
     this.appSettings.GoToThemeSettings();
@@ -186,8 +173,8 @@ export class AnvilSnapshot {
 
   public triggerInputInvalidState = () => {
     this.enterPreviewMode();
-    cy.get("input[aria-required=true]").first().type("123");
-    cy.get("input[aria-required=true]").first().clear();
+    cy.get("input[required]").first().type("123");
+    cy.get("input[required]").first().clear();
     this.exitPreviewMode();
     this.agHelper.GetNClick(this.locators.propertyPaneSidebar);
   };

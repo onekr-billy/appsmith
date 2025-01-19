@@ -1,29 +1,29 @@
 import { all, call, put, select, takeLeading } from "redux-saga/effects";
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
-import { ReduxActionTypes } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
+import { ReduxActionTypes } from "ee/constants/ReduxActionConstants";
 import { snipingModeBindToSelector } from "selectors/editorSelectors";
-import type { ActionData } from "@appsmith/reducers/entityReducers/actionsReducer";
-import { getCanvasWidgets } from "@appsmith/selectors/entitiesSelector";
+import type { ActionData } from "ee/reducers/entityReducers/actionsReducer";
+import { getCanvasWidgets } from "ee/selectors/entitiesSelector";
 import {
   batchUpdateWidgetDynamicProperty,
   batchUpdateWidgetProperty,
 } from "actions/controlActions";
-import AnalyticsUtil from "@appsmith/utils/AnalyticsUtil";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
 
 import {
   SNIPING_NOT_SUPPORTED,
   SNIPING_SELECT_WIDGET_AGAIN,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 
 import WidgetFactory from "WidgetProvider/factory";
 import type { CanvasWidgetsReduxState } from "reducers/entityReducers/canvasWidgetsReducer";
 import { setSnipingMode } from "actions/propertyPaneActions";
 import { selectWidgetInitAction } from "actions/widgetSelectionActions";
 import { SelectionRequestType } from "sagas/WidgetSelectUtils";
-import { toast } from "design-system";
+import { toast } from "@appsmith/ads";
 import type { PropertyUpdates } from "WidgetProvider/constants";
-import type { ModuleInstance } from "@appsmith/constants/ModuleInstanceConstants";
-import { getModuleInstanceById } from "@appsmith/selectors/moduleInstanceSelectors";
+import type { ModuleInstance } from "ee/constants/ModuleInstanceConstants";
+import { getModuleInstanceById } from "ee/selectors/moduleInstanceSelectors";
 
 export function* bindDataToWidgetSaga(
   action: ReduxAction<{
@@ -52,13 +52,17 @@ export function* bindDataToWidgetSaga(
     toast.show(SNIPING_SELECT_WIDGET_AGAIN(), {
       kind: "warning",
     });
+
     return;
   }
+
   const { widgetId } = action.payload;
 
   let isValidProperty = true;
+
   // Pranav has an Open PR for this file so just returning for now
   if (!actionName) return;
+
   const { getSnipingModeUpdates } = WidgetFactory.getWidgetMethods(
     selectedWidget.type,
   );
@@ -98,6 +102,7 @@ export function* bindDataToWidgetSaga(
     const updatesMap: Record<string, string> = updates?.reduce(
       (acc: Record<string, string>, update) => {
         acc[update.propertyPath] = update.propertyValue as string;
+
         return acc;
       },
       {},

@@ -29,6 +29,7 @@ const getSizes = (size: ButtonSizes, isIconButton?: boolean) => {
         ? "var(--ads-v2-spaces-2)"
         : "var(--ads-v2-spaces-2) var(--ads-v2-spaces-3)"};
       --button-gap: var(--ads-v2-spaces-2);
+      --button-min-width: 60px;
     `,
     md: css`
       --button-font-weight: 600;
@@ -37,8 +38,10 @@ const getSizes = (size: ButtonSizes, isIconButton?: boolean) => {
         ? "var(--ads-v2-spaces-3)"
         : "var(--ads-v2-spaces-3) var(--ads-v2-spaces-4)"};
       --button-gap: var(--ads-v2-spaces-3);
+      --button-min-width: 80px;
     `,
   };
+
   return Sizes[size];
 };
 
@@ -56,6 +59,7 @@ const getHeights = (size: ButtonSizes, isIconButton?: boolean) => {
     //   --button-height: 40px;
     // `,
   };
+
   return Heights[size];
 };
 
@@ -173,6 +177,8 @@ export const ButtonContent = styled.div<{
   box-sizing: border-box;
   padding: var(--button-padding);
   border-radius: inherit;
+  min-width: ${({ isIconButton }) =>
+    isIconButton ? "unset" : "var(--button-min-width)"};
 
   & > .${ButtonContentChildrenClassName} {
     display: flex;

@@ -9,7 +9,7 @@ import {
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
+} from "ee/constants/ReduxActionConstants";
 import type { APP_MODE } from "entities/App";
 import { call, put, spawn } from "redux-saga/effects";
 import type { DeployConsolidatedApi } from "sagas/InitSagas";
@@ -18,24 +18,18 @@ import {
   reportSWStatus,
   waitForWidgetConfigBuild,
 } from "sagas/InitSagas";
-import PerformanceTracker, {
-  PerformanceTransactionName,
-} from "utils/PerformanceTracker";
 import type { AppEnginePayload } from ".";
 import AppEngine, { ActionsNotFoundError } from ".";
 import { fetchJSLibraries } from "actions/JSLibraryActions";
-import {
-  waitForSegmentInit,
-  waitForFetchUserSuccess,
-} from "@appsmith/sagas/userSagas";
-import { waitForFetchEnvironments } from "@appsmith/sagas/EnvironmentSagas";
+import { waitForFetchUserSuccess } from "ee/sagas/userSagas";
 import { fetchJSCollectionsForView } from "actions/jsActionActions";
 import {
   fetchAppThemesAction,
   fetchSelectedAppThemeAction,
 } from "actions/appThemingActions";
-import type { Span } from "@opentelemetry/api";
-import { endSpan, startNestedSpan } from "UITelemetry/generateTraces";
+import type { Span } from "instrumentation/types";
+import { endSpan, startNestedSpan } from "instrumentation/generateTraces";
+
 export default class AppViewerEngine extends AppEngine {
   constructor(mode: APP_MODE) {
     super(mode);
@@ -77,23 +71,13 @@ export default class AppViewerEngine extends AppEngine {
     endSpan(viewerSetupSpan);
   }
 
-  startPerformanceTracking() {
-    PerformanceTracker.startAsyncTracking(
-      PerformanceTransactionName.INIT_VIEW_APP,
-    );
-  }
-
-  stopPerformanceTracking() {
-    PerformanceTracker.stopAsyncTracking(
-      PerformanceTransactionName.INIT_VIEW_APP,
-    );
-  }
-
   *loadAppEntities(
     toLoadPageId: string,
     applicationId: string,
     allResponses: DeployConsolidatedApi,
     rootSpan: Span,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): any {
     const loadAppEntitiesSpan = startNestedSpan(
       "AppViewerEngine.loadAppEntities",
@@ -108,6 +92,8 @@ export default class AppViewerEngine extends AppEngine {
       publishedActions,
       themes,
     } = allResponses;
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const initActionsCalls: any = [
       fetchActionsForView({ applicationId, publishedActions }),
       fetchJSCollectionsForView({
@@ -116,7 +102,7 @@ export default class AppViewerEngine extends AppEngine {
       }),
       fetchSelectedAppThemeAction(applicationId, currentTheme),
       fetchAppThemesAction(applicationId, themes),
-      setupPublishedPage(toLoadPageId, true, true, pageWithMigratedDsl),
+      setupPublishedPage(toLoadPageId, true, pageWithMigratedDsl),
     ];
 
     const successActionEffects = [
@@ -153,22 +139,9 @@ export default class AppViewerEngine extends AppEngine {
       "AppViewerEngine.waitForFetchUserSuccess",
       rootSpan,
     );
+
     yield call(waitForFetchUserSuccess);
     endSpan(waitForUserSpan);
-
-    const waitForSegmentSpan = startNestedSpan(
-      "AppViewerEngine.waitForSegmentInit",
-      rootSpan,
-    );
-    yield call(waitForSegmentInit, true);
-    endSpan(waitForSegmentSpan);
-
-    const waitForEnvironmentsSpan = startNestedSpan(
-      "AppViewerEngine.waitForFetchEnvironments",
-      rootSpan,
-    );
-    yield call(waitForFetchEnvironments);
-    endSpan(waitForEnvironmentsSpan);
 
     yield put(fetchAllPageEntityCompletion([executePageLoadActions()]));
 

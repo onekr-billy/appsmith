@@ -140,7 +140,7 @@ public class ApplicationPageServiceTest {
     @WithUserDetails("api_user")
     public void cloneApplication_WhenClonedSuccessfully_ApplicationIsPublished() {
         Mono<Application> applicationMono = createPageMono(UUID.randomUUID().toString())
-                .flatMap(pageDTO -> applicationPageService.cloneApplication(pageDTO.getApplicationId(), null));
+                .flatMap(pageDTO -> applicationPageService.cloneApplication(pageDTO.getApplicationId()));
 
         StepVerifier.create(applicationMono)
                 .assertNext(application -> {
@@ -197,7 +197,7 @@ public class ApplicationPageServiceTest {
         int currentDslVersion = layout.getDsl().getAsNumber("version").intValue();
         Mockito.when(dslMigrationUtils.getLatestDslVersion()).thenReturn(Mono.just(currentDslVersion));
 
-        StepVerifier.create(applicationPageService.getPageAndMigrateDslByBranchAndDefaultPageId(
+        StepVerifier.create(applicationPageService.getPageAndMigrateDslByBranchAndBasePageId(
                         newPage.getId(), null, false, true))
                 .assertNext(pageDTO -> {
                     Layout layout2 = pageDTO.getLayouts().get(0);
@@ -242,7 +242,7 @@ public class ApplicationPageServiceTest {
         Mockito.when(dslMigrationUtils.migratePageDsl(any(JSONObject.class))).thenReturn(Mono.just(dslAfterMigration));
 
         Mono<NewPage> newPageMono = applicationPageService
-                .getPageAndMigrateDslByBranchAndDefaultPageId(newPage.getId(), null, false, true)
+                .getPageAndMigrateDslByBranchAndBasePageId(newPage.getId(), null, false, true)
                 .then(newPageService.getByIdWithoutPermissionCheck(newPage.getId()));
 
         StepVerifier.create(newPageMono)
@@ -302,7 +302,7 @@ public class ApplicationPageServiceTest {
         Mockito.when(dslMigrationUtils.migratePageDsl(any(JSONObject.class))).thenReturn(Mono.just(dslAfterMigration));
 
         Mono<NewPage> newPageMono = applicationPageService
-                .getPageAndMigrateDslByBranchAndDefaultPageId(newPage.getId(), null, false, true)
+                .getPageAndMigrateDslByBranchAndBasePageId(newPage.getId(), null, false, true)
                 .then(newPageService.getByIdWithoutPermissionCheck(newPage.getId()));
 
         StepVerifier.create(newPageMono)
@@ -350,7 +350,7 @@ public class ApplicationPageServiceTest {
         Mockito.when(dslMigrationUtils.migratePageDsl(any(JSONObject.class))).thenReturn(Mono.just(dslAfterMigration));
 
         Mono<NewPage> newPageMono = applicationPageService
-                .getPageAndMigrateDslByBranchAndDefaultPageId(newPage.getId(), null, true, true)
+                .getPageAndMigrateDslByBranchAndBasePageId(newPage.getId(), null, true, true)
                 .then(newPageService.getByIdWithoutPermissionCheck(newPage.getId()));
 
         StepVerifier.create(newPageMono)
@@ -384,7 +384,7 @@ public class ApplicationPageServiceTest {
         Application application = new Application();
         application.setName(appName);
         GitArtifactMetadata gitArtifactMetadata = new GitArtifactMetadata();
-        gitArtifactMetadata.setBranchName("branch1");
+        gitArtifactMetadata.setRefName("branch1");
         application.setGitApplicationMetadata(gitArtifactMetadata);
 
         Mono<Application> importAppMono = applicationPageService
@@ -395,7 +395,7 @@ public class ApplicationPageServiceTest {
                 })
                 .flatMap(createdApp -> {
                     createdApp.setId(null);
-                    createdApp.getGitApplicationMetadata().setBranchName("branch2");
+                    createdApp.getGitApplicationMetadata().setRefName("branch2");
                     // just duplicate the app, we're not considering the pages, they remain same in both apps
                     return applicationRepository.save(createdApp);
                 })
@@ -472,7 +472,7 @@ public class ApplicationPageServiceTest {
                 .assertNext(pages -> {
                     assertThat(pages.size()).isEqualTo(2);
                     Set<String> pageNames = pages.stream()
-                            .map(page -> page.getUnpublishedPage().getName())
+                            .map(page -> page.getPublishedPage().getName())
                             .collect(Collectors.toSet());
                     assertThat(pageNames).contains(pageName);
                     assertThat(pageNames).doesNotContain(unpublishedPageName);

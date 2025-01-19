@@ -1,4 +1,4 @@
-import type { JSActionEntity } from "@appsmith/entities/DataTree/types";
+import type { JSActionEntity } from "ee/entities/DataTree/types";
 import type { DataTreeEntity } from "entities/DataTree/dataTreeTypes";
 import JSObjectCollection from "workers/Evaluation/JSObject/Collection";
 import { jsObjectFunctionFactory } from "workers/Evaluation/fns/utils/jsObjectFnFactory";
@@ -10,13 +10,19 @@ function getJSFunctionsForEntity({
   jsObjectName: string;
   jsObject: JSActionEntity;
 }) {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const jsObjectFunction: Record<string, any> = {};
   const resolvedFunctions = JSObjectCollection.getResolvedFunctions();
   const resolvedObject = Object.assign({}, resolvedFunctions[jsObjectName]);
+
   for (const fnName of Object.keys(resolvedObject || {})) {
     const fn = resolvedObject[fnName];
+
     if (typeof fn !== "function") continue;
+
     const data = jsObject[fnName]?.data;
+
     jsObjectFunction[fnName] = jsObjectFunctionFactory(
       fn,
       jsObjectName + "." + fnName,
@@ -26,6 +32,7 @@ function getJSFunctionsForEntity({
       jsObjectFunction[fnName]["data"] = data;
     }
   }
+
   return jsObjectFunction;
 }
 
@@ -49,5 +56,6 @@ export function getJSActionForEvalContext(
 
   jsObjectForEval =
     JSObjectCollection.getVariablesForEvaluationContext(entityName);
+
   return Object.assign(jsObjectForEval, fns);
 }

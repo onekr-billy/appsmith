@@ -2,6 +2,7 @@ package com.appsmith.server.newactions.importable;
 
 import com.appsmith.external.models.ActionDTO;
 import com.appsmith.external.models.Datasource;
+import com.appsmith.external.models.PluginType;
 import com.appsmith.external.models.Policy;
 import com.appsmith.server.actioncollections.base.ActionCollectionService;
 import com.appsmith.server.constants.FieldName;
@@ -289,10 +290,9 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
             // find existing actions in all the branches of this artifact and put them in a map
             Mono<Map<String, NewAction>> actionsInOtherBranchesMono;
             if (artifact.getGitArtifactMetadata() != null) {
-                final String defaultArtifactId =
-                        artifact.getGitArtifactMetadata().getDefaultArtifactId();
                 actionsInOtherBranchesMono = artifactBasedImportableService
-                        .getExistingResourcesInOtherBranchesFlux(defaultArtifactId, artifact.getId())
+                        .getExistingResourcesInOtherBranchesFlux(
+                                importingMetaDTO.getBranchedArtifactIds(), artifact.getId())
                         .filter(newAction -> newAction.getGitSyncId() != null)
                         .collectMap(NewAction::getGitSyncId);
             } else {
@@ -333,7 +333,7 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
                                                 mappedImportableResourcesDTO, actionsInBranches, newAction);
                             }
 
-                            Context defaultContext = populateIdReferencesAndReturnDefaultContext(
+                            Context baseContext = populateIdReferencesAndReturnBaseContext(
                                     importingMetaDTO,
                                     mappedImportableResourcesDTO,
                                     artifact,
@@ -361,11 +361,7 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
                                                         actionsInCurrentArtifact,
                                                         newAction);
 
-                                updateExistingAction(
-                                        existingAction,
-                                        newAction,
-                                        importingMetaDTO.getBranchName(),
-                                        importingMetaDTO.getPermissionProvider());
+                                updateExistingAction(existingAction, newAction, importingMetaDTO);
 
                                 // Add it to actions list that'll be updated in bulk
                                 existingNewActionList.add(existingAction);
@@ -374,7 +370,7 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
                             } else {
 
                                 artifactBasedImportableService.createNewResource(
-                                        importingMetaDTO, newAction, defaultContext);
+                                        importingMetaDTO, newAction, baseContext);
 
                                 populateDomainMappedReferences(mappedImportableResourcesDTO, newAction);
 
@@ -400,7 +396,7 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
         });
     }
 
-    private Context populateIdReferencesAndReturnDefaultContext(
+    private Context populateIdReferencesAndReturnBaseContext(
             ImportingMetaDTO importingMetaDTO,
             MappedImportableResourcesDTO mappedImportableResourcesDTO,
             Artifact importableArtifact,
@@ -415,12 +411,13 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
         Context parentContext = null;
 
         // If contextId is missing in the actionDTO create a fallback contextId
-        final String fallbackDefaultContextId = unpublishedAction.calculateContextId();
+        final String fallbackBaseContextId = unpublishedAction.calculateContextId();
 
         if (unpublishedAction.getValidName() != null) {
             unpublishedAction.setId(newAction.getId());
+            unpublishedAction.setBaseId(newAction.getBaseIdOrFallback());
             parentContext = artifactBasedImportableService.updateContextInResource(
-                    unpublishedAction, mappedImportableResourcesDTO.getContextMap(), fallbackDefaultContextId);
+                    unpublishedAction, mappedImportableResourcesDTO.getContextMap(), fallbackBaseContextId);
 
             mappedImportableResourcesDTO
                     .getActionResultDTO()
@@ -436,8 +433,9 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
 
         if (publishedAction != null && publishedAction.getValidName() != null) {
             publishedAction.setId(newAction.getId());
+            publishedAction.setBaseId(newAction.getBaseIdOrFallback());
             Context publishedActionContext = artifactBasedImportableService.updateContextInResource(
-                    publishedAction, mappedImportableResourcesDTO.getContextMap(), fallbackDefaultContextId);
+                    publishedAction, mappedImportableResourcesDTO.getContextMap(), fallbackBaseContextId);
 
             if (publishedActionContext != null) {
                 mappedImportableResourcesDTO
@@ -457,11 +455,12 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
 
         newAction.makePristine();
         newAction.setWorkspaceId(workspaceId);
+        artifactBasedImportableService.updateArtifactId(newAction, importableArtifact);
 
         newAction.setPluginId(mappedImportableResourcesDTO.getPluginMap().get(newAction.getPluginId()));
 
-        artifactBasedImportableService.populateDefaultResources(
-                importingMetaDTO, mappedImportableResourcesDTO, importableArtifact, branchedNewAction, newAction);
+        artifactBasedImportableService.populateBaseId(
+                importingMetaDTO, importableArtifact, branchedNewAction, newAction);
 
         return parentContext;
     }
@@ -480,11 +479,17 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
             }
             String oldId = newAction.getId().split("_")[1];
             newAction.setId(newNameAction + "_" + oldId);
+
+            if (PluginType.JS.equals(newAction.getPluginType())) {
+                newAction.getUnpublishedAction().setFullyQualifiedName(newNameAction);
+            }
+
             newAction.getUnpublishedAction().setName(newNameAction);
-            newAction.getUnpublishedAction().setFullyQualifiedName(newNameAction);
             if (newAction.getPublishedAction() != null) {
                 newAction.getPublishedAction().setName(newNameAction);
-                newAction.getPublishedAction().setFullyQualifiedName(newNameAction);
+                if (PluginType.JS.equals(newAction.getPluginType())) {
+                    newAction.getPublishedAction().setFullyQualifiedName(newNameAction);
+                }
             }
             mappedImportableResourcesDTO.getRefactoringNameReference().put(oldNameAction, newNameAction);
         }
@@ -501,10 +506,8 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
     }
 
     private void updateExistingAction(
-            NewAction existingAction,
-            NewAction actionToImport,
-            String branchName,
-            ImportArtifactPermissionProvider permissionProvider) {
+            NewAction existingAction, NewAction actionToImport, ImportingMetaDTO importingMetaDTO) {
+        ImportArtifactPermissionProvider permissionProvider = importingMetaDTO.getPermissionProvider();
         // Since the resource is already present in DB, just update resource
         if (!permissionProvider.hasEditPermission(existingAction)) {
             log.error("User does not have permission to edit action with id: {}", existingAction.getId());
@@ -515,8 +518,9 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
         updateImportableActionFromExistingAction(existingAction, actionToImport);
 
         copyNestedNonNullProperties(actionToImport, existingAction);
-        // Update branchName
-        existingAction.getDefaultResources().setBranchName(branchName);
+        // Update ref name
+        existingAction.setRefType(importingMetaDTO.getRefType());
+        existingAction.setRefName(importingMetaDTO.getRefName());
         // Recover the deleted state present in DB from imported action
         existingAction
                 .getUnpublishedAction()
@@ -531,11 +535,11 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
 
     private void putActionIdInMap(NewAction newAction, ImportActionResultDTO importActionResultDTO) {
         // Populate actionIdsMap to associate the appropriate actions to run on context load
-        String defaultResourcesActionId = newAction.getDefaultResources().getActionId();
+        String baseActionId = newAction.getBaseId();
 
-        if (defaultResourcesActionId == null) {
-            defaultResourcesActionId = newAction.getId();
-            newAction.getDefaultResources().setActionId(newAction.getId());
+        if (baseActionId == null) {
+            baseActionId = newAction.getId();
+            newAction.setBaseId(newAction.getId());
         }
 
         if (newAction.getUnpublishedAction() != null) {
@@ -556,7 +560,7 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
                         .getUnpublishedCollectionIdToActionIdsMap()
                         .get(unpublishedAction.getCollectionId());
 
-                actionIds.put(defaultResourcesActionId, newAction.getId());
+                actionIds.put(baseActionId, newAction.getId());
             }
         }
         if (newAction.getPublishedAction() != null) {
@@ -576,7 +580,7 @@ public class NewActionImportableServiceCEImpl implements ImportableServiceCE<New
                 final Map<String, String> actionIds = importActionResultDTO
                         .getPublishedCollectionIdToActionIdsMap()
                         .get(publishedAction.getCollectionId());
-                actionIds.put(defaultResourcesActionId, newAction.getId());
+                actionIds.put(baseActionId, newAction.getId());
             }
         }
     }

@@ -64,8 +64,14 @@ public class CommonConfig {
     @Value("${disable.telemetry:true}")
     private boolean isTelemetryDisabled;
 
-    @Value("${appsmith.micrometer.tracing.detail.enabled:false}")
+    @Value("${appsmith.observability.tracing.detail.enabled:false}")
     private boolean tracingDetail;
+
+    @Value("${appsmith.observability.metrics.detail.enabled:false}")
+    private boolean metricsDetail;
+
+    @Value("${appsmith.observability.metrics.interval.millis:60000}")
+    private int metricsIntervalMillis;
 
     private List<String> allowedDomains;
 

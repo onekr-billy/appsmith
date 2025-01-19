@@ -8,12 +8,14 @@ import com.appsmith.external.models.ActionExecutionResult;
 import com.appsmith.external.models.Datasource;
 import com.appsmith.external.models.Param;
 import com.appsmith.server.applications.base.ApplicationService;
+import com.appsmith.server.configurations.CommonConfig;
 import com.appsmith.server.constants.FieldName;
 import com.appsmith.server.datasources.base.DatasourceService;
 import com.appsmith.server.datasourcestorages.base.DatasourceStorageService;
 import com.appsmith.server.domains.NewAction;
 import com.appsmith.server.exceptions.AppsmithError;
 import com.appsmith.server.exceptions.AppsmithException;
+import com.appsmith.server.helpers.ActionExecutionSolutionHelper;
 import com.appsmith.server.helpers.PluginExecutorHelper;
 import com.appsmith.server.newactions.base.NewActionService;
 import com.appsmith.server.newpages.base.NewPageService;
@@ -22,6 +24,7 @@ import com.appsmith.server.services.AnalyticsService;
 import com.appsmith.server.services.AuthenticationValidator;
 import com.appsmith.server.services.ConfigService;
 import com.appsmith.server.services.DatasourceContextService;
+import com.appsmith.server.services.FeatureFlagService;
 import com.appsmith.server.services.SessionUserService;
 import com.appsmith.server.services.TenantService;
 import com.appsmith.server.solutions.ActionPermission;
@@ -69,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
@@ -103,10 +107,10 @@ class ActionExecutionSolutionCEImplTest {
     @MockBean
     NewPageService newPageService;
 
-    @MockBean
+    @SpyBean
     ApplicationService applicationService;
 
-    @MockBean
+    @SpyBean
     SessionUserService sessionUserService;
 
     @MockBean
@@ -126,6 +130,15 @@ class ActionExecutionSolutionCEImplTest {
 
     @SpyBean
     TenantService tenantService;
+
+    @SpyBean
+    CommonConfig commonConfig;
+
+    @SpyBean
+    ActionExecutionSolutionHelper actionExecutionSolutionHelper;
+
+    @SpyBean
+    FeatureFlagService featureFlagService;
 
     @Autowired
     EnvironmentPermission environmentPermission;
@@ -156,7 +169,10 @@ class ActionExecutionSolutionCEImplTest {
                 datasourceStorageService,
                 environmentPermission,
                 configService,
-                tenantService);
+                tenantService,
+                commonConfig,
+                actionExecutionSolutionHelper,
+                featureFlagService);
 
         ObservationRegistry.ObservationConfig mockObservationConfig =
                 Mockito.mock(ObservationRegistry.ObservationConfig.class);
@@ -197,7 +213,7 @@ class ActionExecutionSolutionCEImplTest {
     @Test
     public void testExecuteAction_withoutExecuteActionDTOPart_failsValidation() {
         final Mono<ActionExecutionResult> actionExecutionResultMono = actionExecutionSolution.executeAction(
-                Flux.empty(), null, FieldName.UNUSED_ENVIRONMENT_ID, null, Boolean.FALSE);
+                Flux.empty(), FieldName.UNUSED_ENVIRONMENT_ID, null, Boolean.FALSE);
 
         StepVerifier.create(actionExecutionResultMono)
                 .expectErrorMatches(e -> e instanceof AppsmithException
@@ -211,17 +227,17 @@ class ActionExecutionSolutionCEImplTest {
                 .contentType(new MediaType("multipart", "form-data", Map.of("boundary", "boundary")))
                 .body(
                         """
-                        --boundary\r
-                        Content-Disposition: form-data; name="executeActionDTO"\r
-                        \r
-                        irrelevant content\r
-                        --boundary--\r
-                        """);
+                                --boundary\r
+                                Content-Disposition: form-data; name="executeActionDTO"\r
+                                \r
+                                irrelevant content\r
+                                --boundary--\r
+                                """);
 
         final Flux<Part> partsFlux = BodyExtractors.toParts().extract(mock, this.context);
 
-        final Mono<ActionExecutionResult> actionExecutionResultMono = actionExecutionSolution.executeAction(
-                partsFlux, null, FieldName.UNUSED_ENVIRONMENT_ID, null, Boolean.FALSE);
+        final Mono<ActionExecutionResult> actionExecutionResultMono =
+                actionExecutionSolution.executeAction(partsFlux, FieldName.UNUSED_ENVIRONMENT_ID, null, Boolean.FALSE);
 
         StepVerifier.create(actionExecutionResultMono)
                 .expectErrorMatches(e -> e instanceof AppsmithException
@@ -235,17 +251,17 @@ class ActionExecutionSolutionCEImplTest {
                 .contentType(new MediaType("multipart", "form-data", Map.of("boundary", "boundary")))
                 .body(
                         """
-                        --boundary\r
-                        Content-Disposition: form-data; name="executeActionDTO"\r
-                        \r
-                        {"viewMode":false}\r
-                        --boundary--\r
-                        """);
+                                --boundary\r
+                                Content-Disposition: form-data; name="executeActionDTO"\r
+                                \r
+                                {"viewMode":false}\r
+                                --boundary--\r
+                                """);
 
         final Flux<Part> partsFlux = BodyExtractors.toParts().extract(mock, this.context);
 
         final Mono<ActionExecutionResult> actionExecutionResultMono =
-                actionExecutionSolution.executeAction(partsFlux, null, null, null, Boolean.FALSE);
+                actionExecutionSolution.executeAction(partsFlux, null, null, Boolean.FALSE);
 
         StepVerifier.create(actionExecutionResultMono)
                 .expectErrorMatches(e -> e instanceof AppsmithException
@@ -296,12 +312,10 @@ class ActionExecutionSolutionCEImplTest {
                 .getTrueEnvironmentId(
                         any(), any(), any(), Mockito.eq(environmentPermission.getExecutePermission()), anyBoolean());
         doReturn(Mono.just(mockResult)).when(executionSolutionSpy).executeAction(any(), any());
-        doReturn(Mono.just(newAction))
-                .when(newActionService)
-                .findByBranchNameAndDefaultActionId(any(), any(), Mockito.anyBoolean(), any());
+        doReturn(Mono.just(newAction)).when(newActionService).findById(anyString(), any());
 
         Mono<ActionExecutionResult> actionExecutionResultMono =
-                executionSolutionSpy.executeAction(partsFlux, null, null, null, Boolean.FALSE);
+                executionSolutionSpy.executeAction(partsFlux, null, null, Boolean.FALSE);
 
         StepVerifier.create(actionExecutionResultMono)
                 .assertNext(response -> {
@@ -356,12 +370,10 @@ class ActionExecutionSolutionCEImplTest {
                 .getTrueEnvironmentId(
                         any(), any(), any(), Mockito.eq(environmentPermission.getExecutePermission()), anyBoolean());
         doReturn(Mono.just(mockResult)).when(executionSolutionSpy).executeAction(any(), any());
-        doReturn(Mono.just(newAction))
-                .when(newActionService)
-                .findByBranchNameAndDefaultActionId(any(), any(), Mockito.anyBoolean(), any());
+        doReturn(Mono.just(newAction)).when(newActionService).findById(anyString(), any());
 
         Mono<ActionExecutionResult> actionExecutionResultMono =
-                executionSolutionSpy.executeAction(partsFlux, null, null, null, Boolean.FALSE);
+                executionSolutionSpy.executeAction(partsFlux, null, null, Boolean.FALSE);
 
         StepVerifier.create(actionExecutionResultMono)
                 .assertNext(response -> {

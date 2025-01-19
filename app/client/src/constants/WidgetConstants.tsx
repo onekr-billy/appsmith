@@ -1,4 +1,4 @@
-import type { SupportedLayouts } from "reducers/entityReducers/pageListReducer";
+import type { SupportedLayouts } from "reducers/entityReducers/types";
 import type { WidgetType as FactoryWidgetType } from "WidgetProvider/factory";
 import { THEMEING_TEXT_SIZES } from "./ThemeConstants";
 import type { WidgetCardProps } from "widgets/BaseWidget";
@@ -117,7 +117,7 @@ export const MODAL_PORTAL_CLASSNAME = "bp3-modal-widget";
 export const MODAL_PORTAL_OVERLAY_CLASSNAME = "bp3-overlay-zindex";
 export const CANVAS_SELECTOR = "canvas";
 
-export const DEFAULT_CENTER = { lat: -34.397, lng: 150.644 };
+export const DEFAULT_CENTER = { lat: 40.7128, lng: -74.006 };
 
 export enum FontStyleTypes {
   BOLD = "BOLD",
@@ -229,7 +229,6 @@ export const MAX_MODAL_WIDTH_FROM_MAIN_WIDTH = 0.95;
 export const FILE_SIZE_LIMIT_FOR_BLOBS = 5000 * 1024; // 5MB
 
 export const WIDGET_TAGS = {
-  BUILDING_BLOCKS: "Building Blocks",
   SUGGESTED_WIDGETS: "Suggested",
   INPUTS: "Inputs",
   BUTTONS: "Buttons",
@@ -241,6 +240,7 @@ export const WIDGET_TAGS = {
   SLIDERS: "Sliders",
   CONTENT: "Content",
   EXTERNAL: "External",
+  BUILDING_BLOCKS: "Building Blocks",
 } as const;
 
 export type WidgetTags = (typeof WIDGET_TAGS)[keyof typeof WIDGET_TAGS];

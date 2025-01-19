@@ -11,7 +11,7 @@ import EditorNavigation, {
 
 describe(
   "Table widget date column inline editing functionality",
-  { tags: ["@tag.Widget", "@tag.Table"] },
+  { tags: ["@tag.Widget", "@tag.Table", "@tag.Binding"] },
   () => {
     before(() => {
       agHelper.AddDsl("Table/DateCellEditingDSL");
@@ -180,7 +180,7 @@ describe(
       agHelper.AssertCSS(
         table._editCellEditor,
         "border",
-        "1px solid rgb(255, 255, 255)",
+        "1px solid rgb(242, 43, 43)",
       );
       agHelper
         .GetText(`${table._tableRow1Child3} ${locators._inputField}`)

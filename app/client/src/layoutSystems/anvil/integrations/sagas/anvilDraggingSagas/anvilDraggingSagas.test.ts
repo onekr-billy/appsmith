@@ -6,9 +6,9 @@ import { LayoutComponentTypes } from "layoutSystems/anvil/utils/anvilTypes";
 import { expectSaga } from "redux-saga-test-plan";
 import { getWidgets } from "sagas/selectors";
 import { registerWidgets } from "WidgetProvider/factory/registrationHelper";
-import { SectionWidget } from "widgets/anvil/SectionWidget";
-import { ZoneWidget } from "widgets/anvil/ZoneWidget";
-import { WDSButtonWidget } from "widgets/wds/WDSButtonWidget";
+import { WDSSectionWidget } from "modules/ui-builder/ui/wds/WDSSectionWidget";
+import { WDSZoneWidget } from "modules/ui-builder/ui/wds/WDSZoneWidget";
+import { WDSButtonWidget } from "modules/ui-builder/ui/wds/WDSButtonWidget";
 import {
   getCanvasWidth,
   getIsAutoLayoutMobileBreakPoint,
@@ -20,7 +20,7 @@ import { registerLayoutComponents } from "layoutSystems/anvil/utils/layouts/layo
 import { getIsAnvilLayout } from "../../selectors";
 import { selectWidgetInitAction } from "actions/widgetSelectionActions";
 import { SelectionRequestType } from "sagas/WidgetSelectUtils";
-import { WDSModalWidget } from "widgets/wds/WDSModalWidget";
+import { WDSModalWidget } from "modules/ui-builder/ui/wds/WDSModalWidget";
 import { generateMockDataWithTwoSections } from "./mockData.helper";
 import type { AnvilMoveWidgetsPayload } from "../../actions/actionTypes";
 import {
@@ -39,8 +39,8 @@ describe("", () => {
   beforeAll(() => {
     registerLayoutComponents();
     registerWidgets([
-      SectionWidget,
-      ZoneWidget,
+      WDSSectionWidget,
+      WDSZoneWidget,
       WDSButtonWidget,
       WDSModalWidget,
     ]);
@@ -49,6 +49,8 @@ describe("", () => {
   it("should successfully add a new widget to the main canvas", async () => {
     const mainCanvasLayoutId = generateReactKey();
     const newWidgetId = generateReactKey();
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allWidgets: any = {
       [MAIN_CONTAINER_WIDGET_ID]: {
         widgetName: "Main Container",
@@ -98,10 +100,12 @@ describe("", () => {
       ])
       .run();
     const widgetSelectPutEffect = effects.put[effects.put.length - 1];
+
     expect(widgetSelectPutEffect.payload.action).toEqual(
       selectWidgetInitAction(SelectionRequestType.Create, [newWidgetId]),
     );
     const updateWidgetsPutEffect = effects.put[effects.put.length - 2];
+
     expect(updateWidgetsPutEffect.payload.action.type).toBe("UPDATE_LAYOUT");
     // check if new widget was added to main canvas by wrapping it in a section and zone
     const updatedWidgets =
@@ -111,11 +115,14 @@ describe("", () => {
     const sectionWidget = updatedWidgets[sectionWidgetId];
     const zoneWidgetId = sectionWidget.children[0];
     const zoneWidget = updatedWidgets[zoneWidgetId];
+
     expect(zoneWidget.children).toContain(newWidgetId);
   });
   it("should successfully add a new modal widget to the main canvas", async () => {
     const mainCanvasLayoutId = generateReactKey();
     const newModalId = generateReactKey();
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allWidgets: any = {
       [MAIN_CONTAINER_WIDGET_ID]: {
         widgetName: "Main Container",
@@ -166,16 +173,19 @@ describe("", () => {
       ])
       .run();
     const widgetSelectPutEffect = effects.put[effects.put.length - 1];
+
     expect(widgetSelectPutEffect.payload.action).toEqual(
       selectWidgetInitAction(SelectionRequestType.Create, [newModalId]),
     );
     const updateWidgetsPutEffect = effects.put[effects.put.length - 2];
+
     expect(updateWidgetsPutEffect.payload.action.type).toBe("UPDATE_LAYOUT");
     // check if new widget was added to main canvas by wrapping it in a section and zone
     const updatedWidgets =
       updateWidgetsPutEffect.payload.action.payload.widgets;
     const mainCanvasWidget = updatedWidgets[MAIN_CONTAINER_WIDGET_ID];
     const modalWidgetId = mainCanvasWidget.children[0];
+
     expect(modalWidgetId).toContain(newModalId);
   });
 
@@ -219,6 +229,7 @@ describe("", () => {
       ])
       .run();
     const updateWidgetsPutEffect = effects.put[effects.put.length - 1];
+
     expect(updateWidgetsPutEffect.payload.action.type).toBe("UPDATE_LAYOUT");
     // expect section2 to be moved to the first position in layout
     const updatedWidgets =
@@ -227,6 +238,7 @@ describe("", () => {
     const mainCanvasLayout = mainCanvasWidget.layout[0];
     const firstWidgetRow = mainCanvasLayout.layout[0];
     const secondWidgetRow = mainCanvasLayout.layout[1];
+
     expect(firstWidgetRow.layout[0].widgetId).toBe(section2Id);
     expect(secondWidgetRow.layout[0].widgetId).toBe(section1Id);
   });

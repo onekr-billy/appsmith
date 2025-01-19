@@ -3,14 +3,14 @@ import {
   ACTION_OPERATION_DESCRIPTION,
   createMessage,
   NAV_DESCRIPTION,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 import type { ValidationTypes } from "constants/WidgetValidation";
 import type { Datasource } from "entities/Datasource";
-import { PluginPackageName, PluginType } from "entities/Action";
+import { PluginPackageName, PluginType } from "entities/Plugin";
 import type { WidgetType } from "constants/WidgetConstants";
 import type { EntityTypeValue } from "entities/DataTree/dataTreeFactory";
-import { getPluginByPackageName } from "@appsmith/selectors/entitiesSelector";
-import type { AppState } from "@appsmith/reducers";
+import { getPluginByPackageName } from "ee/selectors/entitiesSelector";
+import type { AppState } from "ee/reducers";
 import WidgetFactory from "WidgetProvider/factory";
 import {
   CurlIconV2,
@@ -18,17 +18,17 @@ import {
   GraphQLIconV2,
   JsFileIconV2,
 } from "pages/Editor/Explorer/ExplorerIcons";
-import type { EventLocation } from "@appsmith/utils/analyticsUtilTypes";
+import type { EventLocation } from "ee/utils/analyticsUtilTypes";
 import { isMacOrIOS, modText, shiftText } from "utils/helpers";
 import { FocusEntity } from "navigation/FocusEntity";
-import AnalyticsUtil from "@appsmith/utils/AnalyticsUtil";
-import { Icon } from "design-system";
-import type { ActionParentEntityTypeInterface } from "@appsmith/entities/Engine/actionHelpers";
+import AnalyticsUtil from "ee/utils/AnalyticsUtil";
+import { Icon } from "@appsmith/ads";
+import type { ActionParentEntityTypeInterface } from "ee/entities/Engine/actionHelpers";
 import {
   createNewAPIBasedOnParentEntity,
   createNewJSCollectionBasedOnParentEntity,
-} from "@appsmith/actions/helpers";
-import { openCurlImportModal } from "pages/Editor/CurlImport/helpers";
+} from "ee/actions/helpers";
+import { openCurlImportModal } from "pages/Editor/CurlImport/store/curlImportActions";
 
 export type SelectEvent =
   | React.MouseEvent
@@ -122,10 +122,15 @@ export interface SearchCategory {
   show?: () => boolean;
 }
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getOptionalFilters(optionalFilterMeta: any) {
   return Object.entries(optionalFilterMeta || {}).reduce(
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (acc: Array<string>, [key, value]: any) => {
       value.forEach((value: string) => acc.push(`${key}:${value}`));
+
       return acc;
     },
     [],
@@ -162,11 +167,14 @@ export const getFilterCategoryList = () =>
     return cat.show ? cat.show() : true;
   });
 
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type SearchItem = Datasource | any;
 
 // todo better checks here?
 export const getItemType = (item: SearchItem): SEARCH_ITEM_TYPES => {
   let type: SEARCH_ITEM_TYPES;
+
   if (item.widgetName) type = SEARCH_ITEM_TYPES.widget;
   else if (
     item.kind === SEARCH_ITEM_TYPES.page ||
@@ -180,6 +188,7 @@ export const getItemType = (item: SearchItem): SEARCH_ITEM_TYPES => {
     type = SEARCH_ITEM_TYPES.jsAction;
   else if (item.config?.name) type = SEARCH_ITEM_TYPES.action;
   else type = SEARCH_ITEM_TYPES.datasource;
+
   return type;
 };
 
@@ -221,8 +230,8 @@ export const getItemPage = (item: SearchItem): string => {
   }
 };
 
-export const algoliaHighlightTag = "ais-highlight-0000000000";
-
+// TODO: Fix this the next time the file is edited
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const attachKind = (source: any[], kind: string) => {
   return source.map((s) => ({
     ...s,
@@ -232,9 +241,12 @@ export const attachKind = (source: any[], kind: string) => {
 
 export const getEntityId = (entity: {
   entityType: FocusEntity;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }) => {
   const { entityType } = entity;
+
   switch (entityType) {
     case FocusEntity.DATASOURCE:
       return entity.id;
@@ -255,13 +267,19 @@ export const getEntityId = (entity: {
 export interface ActionOperation {
   title: string;
   desc: string;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon?: any;
   kind: SEARCH_ITEM_TYPES;
   action?: (
     entityId: string,
     location: EventLocation,
     entityType?: ActionParentEntityTypeInterface,
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ) => any;
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   redirect?: (entityId: string, location: EventLocation) => any;
   pluginId?: string;
   focusEntityType?: FocusEntity;
@@ -386,5 +404,6 @@ export const isMatching = (text = "", query = "") => {
   if (typeof text === "string" && typeof query === "string") {
     return text.toLowerCase().indexOf(query.toLowerCase()) > -1;
   }
+
   return false;
 };

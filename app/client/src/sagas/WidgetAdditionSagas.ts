@@ -1,10 +1,10 @@
-import type { ReduxAction } from "@appsmith/constants/ReduxActionConstants";
+import type { ReduxAction } from "actions/ReduxActionTypes";
 import {
   ReduxActionErrorTypes,
   ReduxActionTypes,
   WidgetReduxActionTypes,
-} from "@appsmith/constants/ReduxActionConstants";
-import { ENTITY_TYPE } from "@appsmith/entities/AppsmithConsole/utils";
+} from "ee/constants/ReduxActionConstants";
+import { ENTITY_TYPE } from "ee/entities/AppsmithConsole/utils";
 import type { WidgetBlueprint } from "WidgetProvider/constants";
 import {
   BlueprintOperationTypes,
@@ -18,7 +18,7 @@ import {
   BUILDING_BLOCK_EXPLORER_TYPE,
   RenderModes,
 } from "constants/WidgetConstants";
-import { toast } from "design-system";
+import { toast } from "@appsmith/ads";
 import type { DataTree } from "entities/DataTree/dataTreeTypes";
 import produce from "immer";
 import { klona as clone } from "klona/full";
@@ -62,12 +62,15 @@ export interface GeneratedWidgetPayload {
 }
 
 interface WidgetAddTabChild {
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tabs: any;
   widgetId: string;
 }
 
 function* getEntityNames() {
   const evalTree: DataTree = yield select(getDataTree);
+
   return Object.keys(evalTree);
 }
 
@@ -98,6 +101,7 @@ function* getChildWidgetProps(
       ...entityNames,
     ]);
   }
+
   if (type === "CANVAS_WIDGET") {
     columns =
       (parent.rightColumn - parent.leftColumn) * parent.parentColumnSpace;
@@ -119,6 +123,7 @@ function* getChildWidgetProps(
   const isAutoLayout = isStack(widgets, parent);
   const isFillWidget =
     restDefaultConfig?.responsiveBehavior === ResponsiveBehavior.Fill;
+
   if (isAutoLayout && isFillWidget) columns = 64;
 
   const widgetProps = {
@@ -155,6 +160,7 @@ function* getChildWidgetProps(
   );
 
   let { disableResizeHandles } = WidgetFactory.getWidgetAutoLayoutConfig(type);
+
   if (isFunction(disableResizeHandles)) {
     disableResizeHandles = disableResizeHandles(widget);
   }
@@ -223,6 +229,7 @@ function* getChildWidgetProps(
       ...dynamicBindingPathList,
       ...params.dynamicBindingPathList,
     ];
+
     widget.dynamicBindingPathList = mergedDynamicBindingPathLists;
   } else {
     widget.dynamicBindingPathList = clone(dynamicBindingPathList);
@@ -236,6 +243,8 @@ export function* generateChildWidgets(
   params: WidgetAddChild,
   widgets: { [widgetId: string]: FlattenedWidgetProps },
   propsBlueprint?: WidgetBlueprint,
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any {
   // Get the props for the widget
   const widget = yield getChildWidgetProps(parent, params, widgets);
@@ -275,6 +284,7 @@ export function* generateChildWidgets(
         );
       }),
     );
+
     // Start children array from scratch
     widget.children = [];
     childPropsList.forEach((props: GeneratedWidgetPayload) => {
@@ -392,6 +402,7 @@ export function* addChildSaga(
 ) {
   try {
     const start = performance.now();
+
     toast.dismiss();
     const stateWidgets: CanvasWidgetsReduxState = yield select(getWidgets);
     const { newWidgetId, type, widgetId } = addChildAction.payload;
@@ -410,6 +421,7 @@ export function* addChildSaga(
     const updatedWidgets: {
       [widgetId: string]: FlattenedWidgetProps;
     } = yield call(getUpdateDslAfterCreatingChild, addChildAction.payload);
+
     yield put(
       updateAndSaveLayout(updatedWidgets, {
         shouldReplay: addChildAction.payload.shouldReplay,
@@ -430,6 +442,7 @@ export function* addChildSaga(
       payload: {
         action: WidgetReduxActionTypes.WIDGET_ADD_CHILD,
         error,
+        logToDebugger: true,
       },
     });
   }
@@ -449,6 +462,7 @@ const getChildTabData = (
   const rows =
     (tabProps.bottomRow - tabProps.topRow - GRID_DENSITY_MIGRATION_V1) *
     tabProps.parentRowSpace;
+
   return {
     type: WidgetTypes.CANVAS_WIDGET,
     columns: columns,
@@ -482,6 +496,8 @@ function* addNewTabChildSaga(
   const newTabId = generateReactKey({ prefix: "tab" });
   const newTabLabel = getNextEntityName(
     "Tab ",
+    // TODO: Fix this the next time the file is edited
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tabsArray.map((tab: any) => tab.label),
   );
 
@@ -495,6 +511,8 @@ function* addNewTabChildSaga(
       isVisible: true,
     },
   };
+  // TODO: Fix this the next time the file is edited
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const newTabProps: any = getChildTabData(tabProps, {
     id: newTabId,
     label: newTabLabel,
@@ -505,6 +523,7 @@ function* addNewTabChildSaga(
     getUpdateDslAfterCreatingChild,
     isAutoLayout ? { ...newTabProps, topRow: 0 } : newTabProps,
   );
+
   updatedWidgets[widgetId]["tabsObj"] = tabs;
   yield put(updateAndSaveLayout(updatedWidgets));
 }
@@ -525,6 +544,7 @@ function* addUIEntitySaga(addEntityAction: ReduxAction<WidgetAddChild>) {
       payload: {
         action: WidgetReduxActionTypes.WIDGET_ADD_CHILD,
         error,
+        logToDebugger: true,
       },
     });
   }

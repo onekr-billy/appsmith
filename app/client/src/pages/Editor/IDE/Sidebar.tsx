@@ -1,36 +1,36 @@
 import React, { useCallback, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { builderURL } from "@appsmith/RouteBuilder";
-import { getCurrentPageId } from "selectors/editorSelectors";
+import { builderURL } from "ee/RouteBuilder";
+import { getCurrentBasePageId } from "selectors/editorSelectors";
 import history, { NavigationMethod } from "utils/history";
-import { useCurrentAppState } from "./hooks";
-import { getCurrentWorkspaceId } from "@appsmith/selectors/selectedWorkspaceSelectors";
-import { fetchWorkspace } from "@appsmith/actions/workspaceActions";
-import { IDESidebar, Condition } from "IDE";
+import { useCurrentAppState } from "./hooks/useCurrentAppState";
+import { getCurrentWorkspaceId } from "ee/selectors/selectedWorkspaceSelectors";
+import { fetchWorkspace } from "ee/actions/workspaceActions";
+import { IDESidebar, Condition } from "@appsmith/ads";
 import {
   BottomButtons,
   EditorState,
   TopButtons,
-} from "@appsmith/entities/IDE/constants";
-import { getDatasources } from "@appsmith/selectors/entitiesSelector";
+} from "ee/entities/IDE/constants";
+import { getDatasources } from "ee/selectors/entitiesSelector";
 import {
   createMessage,
   EMPTY_DATASOURCE_TOOLTIP_SIDEBUTTON,
-} from "@appsmith/constants/messages";
+} from "ee/constants/messages";
 
 function Sidebar() {
   const dispatch = useDispatch();
   const appState = useCurrentAppState();
-  const pageId = useSelector(getCurrentPageId);
+  const basePageId = useSelector(getCurrentBasePageId);
   const currentWorkspaceId = useSelector(getCurrentWorkspaceId);
   const datasources = useSelector(getDatasources);
   const datasourcesExist = datasources.length > 0;
 
-  // Updates the top button config based on datasource existence
-  const topButtons = React.useMemo(() => {
+  // Updates the bottom button config based on datasource existence
+  const bottomButtons = React.useMemo(() => {
     return datasourcesExist
-      ? TopButtons
-      : TopButtons.map((button) => {
+      ? BottomButtons
+      : BottomButtons.map((button) => {
           if (button.state === EditorState.DATA) {
             return {
               ...button,
@@ -38,6 +38,7 @@ function Sidebar() {
               tooltip: createMessage(EMPTY_DATASOURCE_TOOLTIP_SIDEBUTTON),
             };
           }
+
           return button;
         });
   }, [datasourcesExist]);
@@ -50,7 +51,7 @@ function Sidebar() {
     (suffix) => {
       history.push(
         builderURL({
-          pageId,
+          basePageId,
           suffix,
         }),
         {
@@ -58,16 +59,16 @@ function Sidebar() {
         },
       );
     },
-    [pageId],
+    [basePageId],
   );
 
   return (
     <IDESidebar
-      bottomButtons={BottomButtons}
+      bottomButtons={bottomButtons}
       editorState={appState}
       id={"t--app-sidebar"}
       onClick={onClick}
-      topButtons={topButtons}
+      topButtons={TopButtons}
     />
   );
 }
